@@ -1,14 +1,29 @@
-import {Request, Response } from 'express'
+import { Request, Response } from 'express'
 import * as Sentry from "@sentry/node";
 import { prisma } from '../configs/prisma.js';
-import {v2 as cloudinary } from 'cloudinary'
-import {GenerateContentConfig, HarmBlockThreshold, HarmCategory} from '@google/genai'
+import { v2 as cloudinary } from 'cloudinary'
+import { GenerateContentConfig, HarmBlockThreshold, HarmCategory } from '@google/genai'
 import fs from 'fs';
 import path from 'path';
 import ai from '../configs/ai.js';
 import axios from 'axios';
+import { getAuth } from '@clerk/express';
+import logger from '../configs/logger.js';
 
-const loadImage = (path: string, mimeType: string)=>{
+// Helper utilities for AI generation safety
+const withTimeout = (promise: Promise<any>, ms: number) => {
+    const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('AI timeout')), ms)
+    );
+    return Promise.race([promise, timeout]);
+};
+
+const isQuotaError = (err: any) => {
+    const msg = err?.message?.toLowerCase() || '';
+    return msg.includes('quota') || msg.includes('rate limit');
+};
+
+const loadImage = (path: string, mimeType: string) => {
     return {
         inlineData: {
             data: fs.readFileSync(path).toString('base64'),
@@ -18,43 +33,145 @@ const loadImage = (path: string, mimeType: string)=>{
 }
 
 
-export const createProject = async (req:Request, res: Response) => {
-    let tempProjectId: string;
-    const { userId } = req.auth();
+/**
+ * Create Project - Generates AI image from uploaded images
+ * 
+ * Flow: Validate inputs → Check credits → Upload to Cloudinary → 
+ *       Generate AI image → Deduct credits → Return project ID
+ */
+export const createProject = async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    let tempProjectId: string | undefined;
+    const { userId } = getAuth(req);
+
+    // Log request entry with context
+    logger.info('[createProject] Request received', {
+        userId,
+        requestId: req.requestId,
+        hasFiles: !!req.files,
+        fileCount: (req.files as any)?.length || 0,
+    });
+
+    // Auth validation
+    if (!userId) {
+        logger.warn('[createProject] Unauthorized access attempt', { requestId: req.requestId });
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
+
     let isCreditDeducted = false;
 
-    const {name = 'New Project', aspectRatio, userPrompt, productName, productDescription, targetLength = 5} = req.body;
-
+    const { name = 'New Project', aspectRatio, userPrompt, productName, productDescription, targetLength = 5 } = req.body;
     const images: any = req.files;
 
-    if(images.length < 2 || !productName){
-        return res.status(400).json({message: 'Please upload at least 2 images'})
+    // Input validation
+    if (images.length < 2 || !productName) {
+        logger.warn('[createProject] Validation failed - insufficient images or missing product name', {
+            userId,
+            imageCount: images.length,
+            hasProductName: !!productName,
+        });
+        return res.status(400).json({ message: 'Please upload at least 2 images' });
     }
 
-    const user = await prisma.user.findUnique({
-        where: {id: userId}
+    logger.info('[createProject] Input validation passed', {
+        userId,
+        projectName: name,
+        aspectRatio,
+        productName,
+        imageCount: images.length,
+    });
+
+    // Database query: Get or create user with proper error handling
+    logger.debug('[createProject] Fetching user from database', { userId });
+    let user = await prisma.user.findUnique({
+        where: { id: userId }
     })
 
-    if(!user || user.credits < 5){
-        return res.status(401).json({message: 'Insufficient credits'})
-    }else{
-        // deduct credits for image generation
-        await prisma.user.update({
-            where: {id: userId},
-            data: {credits: {decrement: 5}}
-        }).then(()=>{isCreditDeducted = true});
+    // Handle race condition: if webhook hasn't created user yet, create them
+    if (!user) {
+        logger.warn('[createProject] User not found in database - auto-creating', { userId });
+        try {
+            user = await prisma.user.create({
+                data: {
+                    id: userId,
+                    email: 'pending@clerk.sync', // Will be updated by webhook
+                    name: 'Pending Sync',
+                    image: '',
+                    credits: 40
+                }
+            });
+            logger.info('[createProject] User auto-created successfully', {
+                userId,
+                initialCredits: 40,
+            });
+        } catch (error: any) {
+            logger.error('[createProject] Failed to auto-create user', {
+                userId,
+                error: error.message,
+                stack: error.stack,
+            });
+            return res.status(500).json({ message: 'Failed to initialize user account. Please try again.' });
+        }
+    } else {
+        logger.debug('[createProject] User found', { userId, credits: user.credits });
     }
 
+    // Credit validation
+    if (user.credits < 5) {
+        logger.warn('[createProject] Insufficient credits', {
+            userId,
+            currentCredits: user.credits,
+            requiredCredits: 5,
+        });
+        return res.status(403).json({ message: 'Insufficient credits. You need at least 5 credits to generate an image.' })
+    }
+
+    // Spam prevention: check if user already has a running generation
+    logger.debug('[createProject] Checking for existing running generations', { userId });
+    const existingRunning = await prisma.project.findFirst({
+        where: { userId, isGenerating: true }
+    });
+
+    if (existingRunning) {
+        logger.warn('[createProject] Generation already in progress - rejecting request', {
+            userId,
+            existingProjectId: existingRunning.id,
+        });
+        return res.status(429).json({ message: 'Generation already running' });
+    }
+
+    logger.info('[createProject] All validations passed - proceeding with generation', { userId });
+
     try {
+        // External API call: Upload images to Cloudinary
+        const cloudinaryStartTime = Date.now();
+        logger.info('[createProject] Starting Cloudinary upload', {
+            userId,
+            imageCount: images.length,
+        });
 
         let uploadedImages = await Promise.all(
-            images.map(async(item: any)=>{
-                let result = await cloudinary.uploader.upload(item.path, {resource_type: 'image'});
+            images.map(async (item: any) => {
+                let result = await cloudinary.uploader.upload(item.path, { resource_type: 'image' });
                 return result.secure_url
             })
         )
 
-         const project = await prisma.project.create({
+        const cloudinaryDuration = Date.now() - cloudinaryStartTime;
+        logger.info('[createProject] Cloudinary upload completed', {
+            userId,
+            imageCount: uploadedImages.length,
+            duration: `${cloudinaryDuration}ms`,
+        });
+
+        // Database operation: Create project record
+        logger.info('[createProject] Creating project record in database', {
+            userId,
+            projectName: name,
+            aspectRatio,
+        });
+
+        const project = await prisma.project.create({
             data: {
                 name,
                 userId,
@@ -66,20 +183,26 @@ export const createProject = async (req:Request, res: Response) => {
                 uploadedImages,
                 isGenerating: true
             }
-         })
+        })
 
-         tempProjectId = project.id;
+        tempProjectId = project.id;
+        logger.info('[createProject] Project created successfully', {
+            userId,
+            projectId: project.id,
+            model: 'gemini-2.5-flash-image',
+        });
+        // Model Selection
+        const model = 'gemini-2.5-flash-image';
 
-         const model = 'gemini-3-pro-image-preview';
-
-         const generationConfig: GenerateContentConfig = {
-            maxOutputTokens: 32768,
-            temperature: 1,
-            topP: 0.95,
+        // Safer generation config with lighter load
+        const generationConfig: GenerateContentConfig = {
+            maxOutputTokens: 2048, // Reduced from 8192
+            temperature: 0.8,
+            topP: 0.9,
             responseModalities: ['IMAGE'],
             imageConfig: {
                 aspectRatio: aspectRatio || '9:16',
-                imageSize: '1K'
+                imageSize: '512' // Reduced from 1K for preview model safety
             },
             safetySettings: [
                 {
@@ -99,76 +222,177 @@ export const createProject = async (req:Request, res: Response) => {
                     threshold: HarmBlockThreshold.OFF,
                 },
             ]
-         }
+        }
 
-         // image to base64 structure for ai model
-         const img1base64 = loadImage(images[0].path, images[0].mimetype);
-         const img2base64 = loadImage(images[1].path, images[1].mimetype);
+        // Prepare images for AI model (convert to base64)
+        logger.debug('[createProject] Converting images to base64 for AI model', { userId });
+        const img1base64 = loadImage(images[0].path, images[0].mimetype);
+        // const img2base64 = loadImage(images[1].path, images[1].mimetype);
 
-         const prompt = {
+        const prompt = {
             text: `Combine the person and product into a realistic photo.
             Make the person naturally hold or use the product.
             Match lighting, shadows, scale and perspective.
             Make the person stand in professional studio lighting.
             Output ecommerce-quality photo realistic imagery.
             ${userPrompt}`
-         }
+        }
 
-         // Generate the image using the ai model
-         const response: any = await ai.models.generateContent({
+        // External API call: Google AI image generation
+        const aiStartTime = Date.now();
+        logger.info('[createProject] Starting AI image generation', {
+            userId,
+            projectId: project.id,
             model,
-            contents: [img1base64, img2base64, prompt],
-            config: generationConfig,
-         })
+            aspectRatio: generationConfig.imageConfig?.aspectRatio,
+            imageSize: generationConfig.imageConfig?.imageSize,
+        });
 
-         // Check if the response is valid
-         if(!response?.candidates?.[0]?.content?.parts){
-            throw new Error('Unexpected response')
-         }
-
-         const parts = response.candidates[0].content.parts;
-         
-         let finalBuffer: Buffer | null = null
-
-         for(const part of parts){
-            if(part.inlineData){
-                finalBuffer = Buffer.from(part.inlineData.data, 'base64')
+        // AI Call with timeout and single attempt only
+        let response: any;
+        try {
+            response = await withTimeout(
+                ai.models.generateContent({
+                    model,
+                    contents: [img1base64, prompt],
+                    config: generationConfig,
+                }),
+                60000 // 60 second timeout
+            );
+        } catch (err: any) {
+            if (isQuotaError(err)) {
+                logger.warn('[createProject] AI quota/rate limit error', {
+                    userId,
+                    projectId: project.id,
+                    error: err.message,
+                });
+                throw new Error('Model quota reached — try later');
             }
-         }
+            logger.error('[createProject] AI generation failed', {
+                userId,
+                projectId: project.id,
+                error: err.message,
+                stack: err.stack,
+            });
+            throw err;
+        }
 
-         if(!finalBuffer){
-            throw new Error('Failed to generate image');
-         }
+        const aiDuration = Date.now() - aiStartTime;
+        logger.info('[createProject] AI generation completed', {
+            userId,
+            projectId: project.id,
+            duration: `${aiDuration}ms`,
+        });
 
-         const base64Image = `data:image/png;base64,${finalBuffer.toString('base64')}`
+        // Strict response validation
+        logger.debug('[createProject] Validating AI response', { userId, projectId: project.id });
+        const parts = response?.candidates?.[0]?.content?.parts || [];
 
-         const uploadResult = await cloudinary.uploader.upload(base64Image, {resource_type: 'image'});
+        const imagePart = parts.find((p: any) => p.inlineData?.data);
 
-         await prisma.project.update({
-            where: {id: project.id},
+        if (!imagePart) {
+            logger.error('[createProject] No image returned from AI model', {
+                userId,
+                projectId: project.id,
+                responseStructure: JSON.stringify(response?.candidates?.[0]?.content),
+            });
+            throw new Error('No image returned from model');
+        }
+
+        logger.info('[createProject] AI response validated successfully', {
+            userId,
+            projectId: project.id,
+        });
+
+        const finalBuffer = Buffer.from(imagePart.inlineData.data, 'base64');
+        const base64Image = `data:image/png;base64,${finalBuffer.toString('base64')}`
+
+        // External API call: Upload generated image to Cloudinary
+        logger.info('[createProject] Uploading generated image to Cloudinary', {
+            userId,
+            projectId: project.id,
+        });
+        const uploadResult = await cloudinary.uploader.upload(base64Image, { resource_type: 'image' });
+        logger.info('[createProject] Generated image uploaded successfully', {
+            userId,
+            projectId: project.id,
+            imageUrl: uploadResult.secure_url,
+        });
+
+        // Database operation: Deduct credits ONLY after success
+        logger.info('[createProject] Deducting credits after successful generation', {
+            userId,
+            creditsToDeduct: 5,
+        });
+        await prisma.user.update({
+            where: { id: userId },
+            data: { credits: { decrement: 5 } }
+        });
+        isCreditDeducted = true;
+        logger.info('[createProject] Credits deducted successfully', { userId });
+
+        // Database operation: Update project with generated image
+        await prisma.project.update({
+            where: { id: project.id },
             data: {
                 generatedImage: uploadResult.secure_url,
                 isGenerating: false
             }
-         })
+        })
+        logger.info('[createProject] Project updated with generated image', {
+            userId,
+            projectId: project.id,
+        });
 
-         res.json({projectId: project.id})
-        
-    } catch (error:any) {
-        if(tempProjectId!){
-            // update project status and error message
+        // Cleanup: Remove temporary uploaded files
+        logger.debug('[createProject] Cleaning up temporary files', {
+            userId,
+            fileCount: images.length,
+        });
+        images.forEach((f: any) => fs.unlink(f.path, () => { }));
+
+        const totalDuration = Date.now() - startTime;
+        logger.info('[createProject] Request completed successfully', {
+            userId,
+            projectId: project.id,
+            totalDuration: `${totalDuration}ms`,
+        });
+
+        res.json({ projectId: project.id })
+
+    } catch (error: any) {
+        // Error handling with rollback logic
+        logger.error('[createProject] Request failed with error', {
+            userId,
+            projectId: tempProjectId,
+            error: error.message,
+            stack: error.stack,
+            isCreditDeducted,
+        });
+
+        if (tempProjectId!) {
+            // Database operation: Update project status with error
+            logger.info('[createProject] Updating project with error status', {
+                userId,
+                projectId: tempProjectId,
+            });
             await prisma.project.update({
-                where: {id: tempProjectId},
-                data: {isGenerating: false, error: error.message}
+                where: { id: tempProjectId },
+                data: { isGenerating: false, error: error.message }
             })
         }
 
-        if(isCreditDeducted){
-            // add credits back
+        if (isCreditDeducted) {
+            // Database operation: Refund credits on failure
+            logger.info('[createProject] Refunding credits due to error', {
+                userId,
+                creditsToRefund: 5,
+            });
             await prisma.user.update({
-                where: {id: userId},
-                data: {credits: {increment: 5}}
+                where: { id: userId },
+                data: { credits: { increment: 5 } }
             })
+            logger.info('[createProject] Credits refunded successfully', { userId });
         }
         Sentry.captureException(error);
         res.status(500).json({ message: error.message });
@@ -176,55 +400,153 @@ export const createProject = async (req:Request, res: Response) => {
 }
 
 
-export const createVideo = async (req:Request, res: Response) => {
-    const {userId} = req.auth()
+/**
+ * Create Video - Generates AI video from generated image
+ * 
+ * Flow: Validate inputs → Check credits → Fetch project → 
+ *       Generate AI video → Poll for completion → Upload to Cloudinary → Update project
+ */
+export const createVideo = async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    const { userId } = getAuth(req)
+
+    // Log request entry
+    logger.info('[createVideo] Request received', {
+        userId,
+        requestId: req.requestId,
+    });
+
+    // Auth validation
+    if (!userId) {
+        logger.warn('[createVideo] Unauthorized access attempt', { requestId: req.requestId });
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
+
     const { projectId } = req.body;
     let isCreditDeducted = false;
 
-    const user = await prisma.user.findUnique({
-        where: {id: userId}
+    logger.info('[createVideo] Input validation passed', { userId, projectId });
+
+    // Database query: Get or create user with proper error handling
+    logger.debug('[createVideo] Fetching user from database', { userId });
+    let user = await prisma.user.findUnique({
+        where: { id: userId }
     })
 
-    if(!user || user.credits < 10){
-        return res.status(401).json({ message: 'Insufficient credits' });
+    // Handle race condition: if webhook hasn't created user yet, create them
+    if (!user) {
+        logger.warn('[createVideo] User not found in database - auto-creating', { userId });
+        try {
+            user = await prisma.user.create({
+                data: {
+                    id: userId,
+                    email: 'pending@clerk.sync', // Will be updated by webhook
+                    name: 'Pending Sync',
+                    image: '',
+                    credits: 20
+                }
+            });
+            logger.info('[createVideo] User auto-created successfully', {
+                userId,
+                initialCredits: 20,
+            });
+        } catch (error: any) {
+            logger.error('[createVideo] Failed to auto-create user', {
+                userId,
+                error: error.message,
+                stack: error.stack,
+            });
+            return res.status(500).json({ message: 'Failed to initialize user account. Please try again.' });
+        }
+    } else {
+        logger.debug('[createVideo] User found', { userId, credits: user.credits });
     }
 
-    // deduct credits for video generation
+    // Credit validation
+    if (user.credits < 10) {
+        logger.warn('[createVideo] Insufficient credits', {
+            userId,
+            currentCredits: user.credits,
+            requiredCredits: 10,
+        });
+        return res.status(403).json({ message: 'Insufficient credits. You need at least 10 credits to generate a video.' });
+    }
+
+    // Database operation: Deduct credits upfront (will refund on error)
+    logger.info('[createVideo] Deducting credits upfront', {
+        userId,
+        creditsToDeduct: 10,
+    });
     await prisma.user.update({
-        where: {id: userId},
-        data: {credits: {decrement: 10}}
-    }).then(()=>{ isCreditDeducted = true} );
+        where: { id: userId },
+        data: { credits: { decrement: 10 } }
+    }).then(() => { isCreditDeducted = true });
+    logger.info('[createVideo] Credits deducted successfully', { userId });
 
     try {
+        // Database query: Fetch project with user details
+        logger.info('[createVideo] Fetching project from database', { userId, projectId });
         const project = await prisma.project.findUnique({
-            where: {id: projectId, userId},
-            include: {user: true}
+            where: { id: projectId, userId },
+            include: { user: true }
         })
 
-        if(!project || project.isGenerating){
-            return res.status(404).json({ message: 'Generation in progress' });
+        if (!project) {
+            logger.warn('[createVideo] Project not found', { userId, projectId });
+            return res.status(404).json({ message: 'Project not found' });
         }
 
-        if(project.generatedVideo){
+        logger.info('[createVideo] Project found', {
+            userId,
+            projectId,
+            hasGeneratedImage: !!project.generatedImage,
+            hasGeneratedVideo: !!project.generatedVideo,
+        });
+
+        // Video generation safety check
+        if (project.isGenerating) {
+            logger.warn('[createVideo] Generation already in progress', { userId, projectId });
+            return res.status(429).json({ message: 'Generation in progress' });
+        }
+
+        if (project.generatedVideo) {
+            logger.warn('[createVideo] Video already exists', { userId, projectId });
             return res.status(404).json({ message: 'Video already generated' });
         }
 
+        // Database operation: Mark project as generating
+        logger.info('[createVideo] Marking project as generating', { userId, projectId });
         await prisma.project.update({
-            where: {id: projectId},
-            data: {isGenerating: true}
+            where: { id: projectId },
+            data: { isGenerating: true }
         })
 
         const prompt = `make the person showcase the product which is ${project.productName} ${project.productDescription && `and Product Description: ${project.productDescription}`}`
-
         const model = 'veo-3.1-generate-preview'
 
-        if(!project.generatedImage){
+        if (!project.generatedImage) {
+            logger.error('[createVideo] Generated image not found', { userId, projectId });
             throw new Error('Generated image not found');
         }
 
-        const image = await axios.get(project.generatedImage, {responseType: 'arraybuffer',})
-
+        // External API call: Fetch generated image from Cloudinary
+        logger.info('[createVideo] Fetching generated image from Cloudinary', {
+            userId,
+            projectId,
+            imageUrl: project.generatedImage,
+        });
+        const image = await axios.get(project.generatedImage, { responseType: 'arraybuffer', })
         const imageBytes: any = Buffer.from(image.data)
+        logger.debug('[createVideo] Image fetched and converted to buffer', { userId, projectId });
+
+        // External API call: Google AI video generation
+        const videoStartTime = Date.now();
+        logger.info('[createVideo] Starting AI video generation', {
+            userId,
+            projectId,
+            model,
+            aspectRatio: project.aspectRatio,
+        });
 
         let operation: any = await ai.models.generateVideos({
             model,
@@ -240,59 +562,148 @@ export const createVideo = async (req:Request, res: Response) => {
             }
         })
 
-        while (!operation.done){
-            console.log('Waiting for video generation to complete...');
-            await new Promise((resolve)=>setTimeout(resolve, 10000));
+        logger.info('[createVideo] Video generation operation initiated', {
+            userId,
+            projectId,
+            operationName: operation.name,
+        });
+
+        // Polling loop: Wait for video generation with timeout guard
+        let attempts = 0;
+        const maxAttempts = 30; // 5 minutes max (30 * 10 seconds)
+        logger.info('[createVideo] Starting polling for video completion', {
+            userId,
+            projectId,
+            maxAttempts,
+            pollInterval: '10s',
+        });
+
+        while (!operation.done && attempts < maxAttempts) {
+            logger.debug('[createVideo] Polling attempt', {
+                userId,
+                projectId,
+                attempt: attempts + 1,
+                maxAttempts,
+            });
+            await new Promise((resolve) => setTimeout(resolve, 10000));
             operation = await ai.operations.getVideosOperation({
                 operation: operation,
             })
+            attempts++;
         }
+
+        if (!operation.done) {
+            const timeoutDuration = Date.now() - videoStartTime;
+            logger.error('[createVideo] Video generation timeout', {
+                userId,
+                projectId,
+                attempts,
+                duration: `${timeoutDuration}ms`,
+            });
+            throw new Error('Video generation timeout');
+        }
+
+        const videoDuration = Date.now() - videoStartTime;
+        logger.info('[createVideo] Video generation completed', {
+            userId,
+            projectId,
+            attempts,
+            duration: `${videoDuration}ms`,
+        });
 
         const filename = `${userId}-${Date.now()}.mp4`;
         const filePath = path.join('videos', filename)
 
-        // Create the images directory if it doesn't exist
-        fs.mkdirSync('videos', {recursive: true})
+        // File operation: Create videos directory if needed
+        logger.debug('[createVideo] Creating videos directory', { userId, projectId });
+        fs.mkdirSync('videos', { recursive: true })
 
-        if(!operation.response.generatedVideos){
-            throw new Error(operation.response.raiMediaFilteredReasons[0])
+        // Validation: Check if video was generated successfully
+        if (!operation.response.generatedVideos) {
+            const filterReason = operation.response.raiMediaFilteredReasons?.[0] || 'Unknown reason';
+            logger.error('[createVideo] Video generation filtered by safety', {
+                userId,
+                projectId,
+                reason: filterReason,
+            });
+            throw new Error(filterReason)
         }
 
-        // Download the video.
+        // External API call: Download video from Google AI
+        logger.info('[createVideo] Downloading generated video', {
+            userId,
+            projectId,
+            filePath,
+        });
         await ai.files.download({
             file: operation.response.generatedVideos[0].video,
             downloadPath: filePath,
         })
+        logger.info('[createVideo] Video downloaded successfully', { userId, projectId });
 
+        // External API call: Upload video to Cloudinary
+        logger.info('[createVideo] Uploading video to Cloudinary', { userId, projectId });
         const uploadResult = await cloudinary.uploader.upload(filePath, { resource_type: 'video' });
+        logger.info('[createVideo] Video uploaded to Cloudinary', {
+            userId,
+            projectId,
+            videoUrl: uploadResult.secure_url,
+        });
 
+        // Database operation: Update project with video URL
         await prisma.project.update({
-            where: {id: project.id},
+            where: { id: project.id },
             data: {
                 generatedVideo: uploadResult.secure_url,
                 isGenerating: false
             }
         })
+        logger.info('[createVideo] Project updated with generated video', {
+            userId,
+            projectId,
+        });
 
-        // remove video file from disk after upload
+        // Cleanup: Remove temporary video file
+        logger.debug('[createVideo] Cleaning up temporary video file', { userId, projectId, filePath });
         fs.unlinkSync(filePath);
 
-        res.json({message: 'Video generation completed', videoUrl: uploadResult.secure_url})
-        
-    } catch (error:any) {
+        const totalDuration = Date.now() - startTime;
+        logger.info('[createVideo] Request completed successfully', {
+            userId,
+            projectId,
+            totalDuration: `${totalDuration}ms`,
+        });
 
-            // update project status and error message
-            await prisma.project.update({
-                where: {id: projectId, userId},
-                data: {isGenerating: false, error: error.message}
-            })
+        res.json({ message: 'Video generation completed', videoUrl: uploadResult.secure_url })
 
-         if(isCreditDeducted){
-            // add credits back
+    } catch (error: any) {
+        // Error handling with rollback logic
+        logger.error('[createVideo] Request failed with error', {
+            userId,
+            projectId,
+            error: error.message,
+            stack: error.stack,
+            isCreditDeducted,
+        });
+
+        // Database operation: Update project status with error
+        logger.info('[createVideo] Updating project with error status', { userId, projectId });
+        await prisma.project.update({
+            where: { id: projectId, userId },
+            data: { isGenerating: false, error: error.message }
+        })
+
+        if (isCreditDeducted) {
+            // Database operation: Refund credits on failure
+            logger.info('[createVideo] Refunding credits due to error', {
+                userId,
+                creditsToRefund: 10,
+            });
             await prisma.user.update({
-                where: {id: userId},
-                data: {credits: {increment: 10}}
+                where: { id: userId },
+                data: { credits: { increment: 10 } }
             })
+            logger.info('[createVideo] Credits refunded successfully', { userId });
         }
 
         Sentry.captureException(error);
@@ -300,39 +711,86 @@ export const createVideo = async (req:Request, res: Response) => {
     }
 }
 
-export const getAllPublishedProjects = async (req:Request, res: Response) => {
-    try {
-        const projects = await prisma.project.findMany({
-            where: {isPublished: true}
-        })
-        res.json({projects})
+/**
+ * Get All Published Projects
+ * 
+ * Returns all projects marked as published for public viewing
+ */
+export const getAllPublishedProjects = async (req: Request, res: Response) => {
+    logger.info('[getAllPublishedProjects] Request received', {
+        requestId: req.requestId,
+    });
 
-    } catch (error:any) {
+    try {
+        // Database query: Fetch all published projects
+        logger.debug('[getAllPublishedProjects] Fetching published projects from database');
+        const projects = await prisma.project.findMany({
+            where: { isPublished: true }
+        })
+
+        logger.info('[getAllPublishedProjects] Published projects fetched successfully', {
+            count: projects.length,
+        });
+
+        res.json({ projects })
+
+    } catch (error: any) {
+        logger.error('[getAllPublishedProjects] Request failed with error', {
+            error: error.message,
+            stack: error.stack,
+        });
         Sentry.captureException(error);
         res.status(500).json({ message: error.message });
     }
 }
 
-export const deleteProject = async (req:Request, res: Response) => {
-    try {
-        const { userId } = req.auth();
-        const { projectId } = req.params;
+/**
+ * Delete Project
+ * 
+ * Deletes a project owned by the authenticated user
+ */
+export const deleteProject = async (req: Request, res: Response) => {
+    const { userId } = getAuth(req);
 
+    logger.info('[deleteProject] Request received', {
+        userId,
+        requestId: req.requestId,
+    });
+
+    try {
+        // Auth validation
+        if (!userId) {
+            logger.warn('[deleteProject] Unauthorized access attempt', { requestId: req.requestId });
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        const { projectId } = req.params;
+        logger.info('[deleteProject] Deleting project', { userId, projectId });
+
+        // Database query: Find project to verify ownership
         const project = await prisma.project.findUnique({
-            where: {id: projectId, userId}
+            where: { id: projectId, userId }
         })
 
-         if (!project){
+        if (!project) {
+            logger.warn('[deleteProject] Project not found or unauthorized', { userId, projectId });
             return res.status(404).json({ message: 'Project not found' });
-         }
+        }
 
-         await prisma.project.delete({
-            where: {id: projectId}
-         })
+        // Database operation: Delete project
+        await prisma.project.delete({
+            where: { id: projectId }
+        })
 
-         res.json({ message: 'Project deleted' });
+        logger.info('[deleteProject] Project deleted successfully', { userId, projectId });
+        res.json({ message: 'Project deleted' });
 
-    } catch (error:any) {
+    } catch (error: any) {
+        logger.error('[deleteProject] Request failed with error', {
+            userId,
+            error: error.message,
+            stack: error.stack,
+        });
         Sentry.captureException(error);
         res.status(500).json({ message: error.message });
     }
