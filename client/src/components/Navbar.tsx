@@ -11,8 +11,8 @@ import toast from 'react-hot-toast';
 export default function Navbar() {
 
     const navigate = useNavigate()
-    const {user} = useUser()
-    const {openSignIn, openSignUp} = useClerk()
+    const { user } = useUser()
+    const { openSignIn, openSignUp } = useClerk()
 
     const [isOpen, setIsOpen] = useState(false);
 
@@ -27,10 +27,10 @@ export default function Navbar() {
         { name: 'Plans', href: '/plans' },
     ];
 
-    const getUserCredits = async ()=>{
+    const getUserCredits = async () => {
         try {
             const token = await getToken()
-            const {data} = await api.get('/api/user/credits', {headers: {Authorization: `Bearer ${token}`}})
+            const { data } = await api.get('/api/user/credits', { headers: { Authorization: `Bearer ${token}` } })
             setCredits(data.credits)
         } catch (error: any) {
             toast.error(error?.response?.data?.message || error.message)
@@ -38,11 +38,11 @@ export default function Navbar() {
         }
     }
 
-    useEffect(()=>{
-        if(user){
-            (async ()=> await getUserCredits())();
+    useEffect(() => {
+        if (user) {
+            (async () => await getUserCredits())();
         }
-    },[user, pathname])
+    }, [user, pathname])
 
     return (
         <motion.nav className='fixed top-5 left-0 right-0 z-50 px-4'
@@ -52,13 +52,14 @@ export default function Navbar() {
             transition={{ type: "spring", stiffness: 250, damping: 70, mass: 1 }}
         >
             <div className='max-w-6xl mx-auto flex items-center justify-between bg-black/50 backdrop-blur-md border border-white/4 rounded-2xl p-3'>
-                <Link to='/' onClick={()=> scrollTo(0,0)}>
-                    <img src={assets.logo} alt="logo" className="h-8" />
+                <Link to='/' onClick={() => scrollTo(0, 0)} className="flex items-center gap-2">
+                    <img src={assets.logo} alt="AdGen Studio logo" className="h-8" />
+                    <span className="text-xl font-bold text-white">AdGen Studio</span>
                 </Link>
 
                 <div className='hidden md:flex items-center gap-8 text-sm font-medium text-gray-300'>
                     {navLinks.map((link) => (
-                        <Link onClick={()=> scrollTo(0,0)} to={link.href} key={link.name} className="hover:text-white transition">
+                        <Link onClick={() => scrollTo(0, 0)} to={link.href} key={link.name} className="hover:text-white transition">
                             {link.name}
                         </Link>
                     ))}
@@ -66,37 +67,37 @@ export default function Navbar() {
 
                 {!user ? (
                     <div className='hidden md:flex items-center gap-3'>
-                        <button onClick={()=> openSignIn()} className='text-sm font-medium text-gray-300 hover:text-white transition max-sm:hidden'>
+                        <button onClick={() => openSignIn()} className='text-sm font-medium text-gray-300 hover:text-white transition max-sm:hidden'>
                             Sign in
                         </button>
-                        <PrimaryButton onClick={()=> openSignUp()} className='max-sm:text-xs hidden sm:inline-block'>Get Started</PrimaryButton>
+                        <PrimaryButton onClick={() => openSignUp()} className='max-sm:text-xs hidden sm:inline-block'>Get Started</PrimaryButton>
                     </div>
                 ) : (
-                    <div className='flex gap-2'> 
-                        <GhostButton onClick={()=> navigate('/plans')} className='border-none text-gray-300 sm:py-1.5'>
+                    <div className='flex gap-2'>
+                        <GhostButton onClick={() => navigate('/plans')} className='border-none text-gray-300 sm:py-1.5'>
                             Credits: {credits}
                         </GhostButton>
                         <UserButton>
                             <UserButton.MenuItems>
 
-                                <UserButton.Action label='Generate' labelIcon={<SparkleIcon size={14}/>} onClick={()=>navigate('/generate')}/>
+                                <UserButton.Action label='Generate' labelIcon={<SparkleIcon size={14} />} onClick={() => navigate('/generate')} />
 
-                                <UserButton.Action label='My Generations' labelIcon={<FolderEditIcon size={14}/>} onClick={()=>navigate('/my-generations')}/>
+                                <UserButton.Action label='My Generations' labelIcon={<FolderEditIcon size={14} />} onClick={() => navigate('/my-generations')} />
 
-                                <UserButton.Action label='Community' labelIcon={<GalleryHorizontalEnd size={14}/>} onClick={()=>navigate('/community')}/>
+                                <UserButton.Action label='Community' labelIcon={<GalleryHorizontalEnd size={14} />} onClick={() => navigate('/community')} />
 
-                                <UserButton.Action label='Plans' labelIcon={<DollarSignIcon size={14}/>} onClick={()=>navigate('/plans')}/>
+                                <UserButton.Action label='Plans' labelIcon={<DollarSignIcon size={14} />} onClick={() => navigate('/plans')} />
 
                             </UserButton.MenuItems>
                         </UserButton>
                     </div>
                 )}
-                
+
                 {!user && <button onClick={() => setIsOpen(!isOpen)} className='md:hidden'>
                     <MenuIcon className='size-6' />
                 </button>
                 }
-                
+
             </div>
             <div className={`flex flex-col items-center justify-center gap-6 text-lg font-medium fixed inset-0 bg-black/40 backdrop-blur-md z-50 transition-all duration-300 ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
                 {navLinks.map((link) => (
@@ -105,10 +106,10 @@ export default function Navbar() {
                     </a>
                 ))}
 
-                <button onClick={() => {setIsOpen(false); openSignIn()}} className='font-medium text-gray-300 hover:text-white transition'>
+                <button onClick={() => { setIsOpen(false); openSignIn() }} className='font-medium text-gray-300 hover:text-white transition'>
                     Sign in
                 </button>
-                <PrimaryButton onClick={() => {setIsOpen(false); openSignUp()}}>Get Started</PrimaryButton>
+                <PrimaryButton onClick={() => { setIsOpen(false); openSignUp() }}>Get Started</PrimaryButton>
 
                 <button
                     onClick={() => setIsOpen(false)}
