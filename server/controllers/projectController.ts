@@ -189,10 +189,10 @@ export const createProject = async (req: Request, res: Response) => {
         logger.info('[createProject] Project created successfully', {
             userId,
             projectId: project.id,
-            model: 'gemini-2.5-flash-image',
+            model: 'gemini-3-pro-image-preview',
         });
-        // Model Selection
-        const model = 'gemini-2.5-flash-image';
+// Model Selection
+        const model = 'gemini-3-pro-image-preview';
 
         // Safer generation config with lighter load
         const generationConfig: GenerateContentConfig = {
@@ -227,7 +227,7 @@ export const createProject = async (req: Request, res: Response) => {
         // Prepare images for AI model (convert to base64)
         logger.debug('[createProject] Converting images to base64 for AI model', { userId });
         const img1base64 = loadImage(images[0].path, images[0].mimetype);
-        // const img2base64 = loadImage(images[1].path, images[1].mimetype);
+        const img2base64 = loadImage(images[1].path, images[1].mimetype);
 
         const prompt = {
             text: `Combine the person and product into a realistic photo.
@@ -254,7 +254,7 @@ export const createProject = async (req: Request, res: Response) => {
             response = await withTimeout(
                 ai.models.generateContent({
                     model,
-                    contents: [img1base64, prompt],
+                    contents: [img1base64, img2base64, prompt],
                     config: generationConfig,
                 }),
                 60000 // 60 second timeout
