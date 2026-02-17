@@ -36,7 +36,8 @@ model Project {
   aspectRatio        String   @default("9:16")
   targetLength       Int      @default(5)
   uploadedImages     String[]
-  generatedImage     String   @default("")
+  generatedImage     String   @default("")      // Single image generation (5 credits)
+  generatedImages    String[] @default([])      // 3-image bundle generation (15 credits)
   generatedVideo     String   @default("")
   isGenerating       Boolean  @default(false)
   isPublished        Boolean  @default(false)

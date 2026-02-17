@@ -16,6 +16,8 @@ const Result = () => {
     const [project, setProjectData] = useState<Project>({} as Project);
     const [loading, setLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [selectedImageIndex, setSelectedImageIndex] = useState(0); // For bundle image selection
+
 
     const fetchProjectData = async () => {
         try {
@@ -38,7 +40,12 @@ const Result = () => {
             const token = await getToken();
             const { data } = await api.post(
                 "/api/project/video",
-                { projectId },
+                {
+                    projectId,
+                    selectedImage: project.generatedImages && project.generatedImages.length > 0
+                        ? project.generatedImages[selectedImageIndex]
+                        : undefined
+                },
                 {
                     headers: { Authorization: `Bearer ${token}` },
                 }
@@ -93,9 +100,45 @@ const Result = () => {
                     <div className="lg:col-span-2 space-y-6">
                         <div className="glass-panel inline-block p-2 rounded-2xl">
                             <div className={`${project?.aspectRatio === "9:16" ? "aspect-9/16" : "aspect-video"} sm:max-h-200 rounded-xl bg-gray-900 overflow-hidden relative`}>
-                                {project?.generatedVideo ? <video src={project.generatedVideo} controls autoPlay loop className="w-full h-full object-cover" /> : <img src={project.generatedImage} alt="Generated Result" className="w-full h-full object-cover" />}
+                                {project?.generatedVideo ? (
+                                    <video src={project.generatedVideo} controls autoPlay loop className="w-full h-full object-cover" />
+                                ) : project?.generatedImages && project.generatedImages.length > 0 ? (
+                                    <img src={project.generatedImages[selectedImageIndex]} alt="Generated Result" className="w-full h-full object-cover" />
+                                ) : (
+                                    <img src={project.generatedImage} alt="Generated Result" className="w-full h-full object-cover" />
+                                )}
                             </div>
                         </div>
+
+                        {/* Bundle Image Selector - Only show if bundle exists */}
+                        {project?.generatedImages && project.generatedImages.length > 1 && (
+                            <div className="glass-panel p-4 rounded-2xl">
+                                <h3 className="text-sm font-medium mb-3 text-gray-300">Image Bundle ({project.generatedImages.length} images)</h3>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {project.generatedImages.map((imageUrl, index) => (
+                                        <button
+                                            key={index}
+                                            onClick={() => setSelectedImageIndex(index)}
+                                            className={`relative rounded-lg overflow-hidden border-2 transition-all ${selectedImageIndex === index
+                                                ? 'border-violet-500 ring-2 ring-violet-500/30'
+                                                : 'border-violet-200/10 hover:border-violet-500/50'
+                                                }`}
+                                        >
+                                            <img
+                                                src={imageUrl}
+                                                alt={`Generated ${index + 1}`}
+                                                className="w-full aspect-square object-cover"
+                                            />
+                                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                                                <p className="text-xs text-white font-medium">
+                                                    {index === 0 ? 'Hero' : index === 1 ? 'Detail' : 'Action'}
+                                                </p>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Sidebar Actions */}
@@ -104,12 +147,44 @@ const Result = () => {
                         <div className="glass-panel p-6 rounded-2xl">
                             <h3 className="text-xl font-semibold mb-4">Actions</h3>
                             <div className="flex flex-col gap-3">
-                                <a href={project.generatedImage?.replace("/upload", "/upload/fl_attachment")} download>
-                                    <GhostButton disabled={!project.generatedImage} className="w-full justify-center rounded-md py-3 disabled:opacity-50 disabled:cursor-not-allowed">
-                                        <ImageIcon className="size-4.5" />
-                                        Download Image
-                                    </GhostButton>
-                                </a>
+                                {/* Single Image Download or Bundle Downloads */}
+                                {project?.generatedImages && project.generatedImages.length > 0 ? (
+                                    <>
+                                        {/* Individual image downloads */}
+                                        {project.generatedImages.map((imageUrl, index) => (
+                                            <a key={index} href={imageUrl?.replace("/upload", "/upload/fl_attachment")} download>
+                                                <GhostButton className="w-full justify-center rounded-md py-3">
+                                                    <ImageIcon className="size-4.5" />
+                                                    Download {index === 0 ? 'Hero' : index === 1 ? 'Detail' : 'Action'} Image
+                                                </GhostButton>
+                                            </a>
+                                        ))}
+                                        {/* Download All button */}
+                                        <div className="border-t border-violet-200/10 my-2"></div>
+                                        <GhostButton
+                                            onClick={() => {
+                                                project.generatedImages?.forEach((url, i) => {
+                                                    const link = document.createElement('a');
+                                                    link.href = url.replace("/upload", "/upload/fl_attachment");
+                                                    link.download = `image-${i + 1}.png`;
+                                                    link.click();
+                                                });
+                                                toast.success('Downloading all images...');
+                                            }}
+                                            className="w-full justify-center rounded-md py-3 bg-violet-500/10 border-violet-500/30"
+                                        >
+                                            <ImageIcon className="size-4.5" />
+                                            Download All Images
+                                        </GhostButton>
+                                    </>
+                                ) : (
+                                    <a href={project.generatedImage?.replace("/upload", "/upload/fl_attachment")} download>
+                                        <GhostButton disabled={!project.generatedImage} className="w-full justify-center rounded-md py-3 disabled:opacity-50 disabled:cursor-not-allowed">
+                                            <ImageIcon className="size-4.5" />
+                                            Download Image
+                                        </GhostButton>
+                                    </a>
+                                )}
                                 <a href={project.generatedVideo?.replace("/upload", "/upload/fl_attachment")} download>
                                     <GhostButton disabled={!project.generatedVideo} className="w-full justify-center rounded-md py-3 disabled:opacity-50 disabled:cursor-not-allowed">
                                         <VideoIcon className="size-4.5" />

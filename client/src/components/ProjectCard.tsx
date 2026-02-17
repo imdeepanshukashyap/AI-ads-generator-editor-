@@ -52,13 +52,20 @@ const ProjectCard = ({ gen, setGenerations, forCommunity = false }: { gen: Proje
             <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition group">
                 {/* preview  */}
                 <div className={`${gen?.aspectRatio === "9:16" ? "aspect-9/16" : "aspect-video"} relative overflow-hidden`}>
-                    {gen.generatedImage && <img src={gen.generatedImage} alt={gen.productName} className={`absolute inset-0 w-full h-full object-cover transition duration-500 ${gen.generatedVideo ? "group-hover:opacity-0" : "group-hover:scale-105"}`} />}
+                    {/* Show bundle or single image */}
+                    {(gen.generatedImages && gen.generatedImages.length > 0 ? gen.generatedImages[0] : gen.generatedImage) && (
+                        <img
+                            src={gen.generatedImages && gen.generatedImages.length > 0 ? gen.generatedImages[0] : gen.generatedImage}
+                            alt={gen.productName}
+                            className={`absolute inset-0 w-full h-full object-cover transition duration-500 ${gen.generatedVideo ? "group-hover:opacity-0" : "group-hover:scale-105"}`}
+                        />
+                    )}
 
                     {gen.generatedVideo && (
                         <video src={gen.generatedVideo} muted loop playsInline className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition duration-500" onMouseEnter={(e) => e.currentTarget.play()} onMouseLeave={(e) => e.currentTarget.pause()} />
                     )}
 
-                    {!gen?.generatedImage && !gen?.generatedVideo && (
+                    {!gen?.generatedImage && !gen?.generatedVideo && (!gen?.generatedImages || gen.generatedImages.length === 0) && (
                         <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-black/20">
                             <Loader2Icon className="size-7 animate-spin" />
                         </div>
@@ -69,6 +76,14 @@ const ProjectCard = ({ gen, setGenerations, forCommunity = false }: { gen: Proje
                         {gen.isGenerating && <span className="text-xs px-2 py-1 bg-yellow-600/30 rounded-full">Generating</span>}
 
                         {gen.isPublished && <span className="text-xs px-2 py-1 bg-green-600/30 rounded-full">Published</span>}
+
+                        {/* Bundle indicator */}
+                        {gen.generatedImages && gen.generatedImages.length > 1 && (
+                            <span className="text-xs px-2 py-1 bg-violet-600/30 rounded-full flex items-center gap-1">
+                                <ImageIcon className="size-3" />
+                                {gen.generatedImages.length}
+                            </span>
+                        )}
                     </div>
 
                     {/* action menu for my generations only */}
@@ -87,7 +102,14 @@ const ProjectCard = ({ gen, setGenerations, forCommunity = false }: { gen: Proje
                             </div>
                             <div className="flex flex-col items-end w-32 text-sm">
                                 <ul className={`text-xs ${menuOpen ? "block" : "hidden"} verflow-hidden right-0 peer-focus:block hover:block w-40 bg-black/50 backdrop-blur text-white border border-gray-500/50 rounded-lg shadow-md mt-2 py-1 z-10`}>
-                                    {gen.generatedImage && (
+                                    {/* Download image(s) */}
+                                    {gen.generatedImages && gen.generatedImages.length > 0 ? (
+                                        gen.generatedImages.map((imageUrl, index) => (
+                                            <a key={index} href={imageUrl?.replace("/upload", "/upload/fl_attachment")} download className="flex gap-2 items-center px-4 py-2 hover:bg-black/10 cursor-pointer">
+                                                <ImageIcon size={14} /> Download {index === 0 ? 'Hero' : index === 1 ? 'Detail' : 'Action'}
+                                            </a>
+                                        ))
+                                    ) : gen.generatedImage && (
                                         <a href={gen.generatedImage?.replace("/upload", "/upload/fl_attachment")} download className="flex gap-2 items-center px-4 py-2 hover:bg-black/10 cursor-pointer">
                                             <ImageIcon size={14} /> Download Image
                                         </a>
@@ -99,8 +121,8 @@ const ProjectCard = ({ gen, setGenerations, forCommunity = false }: { gen: Proje
                                         </a>
                                     )}
 
-                                    {(gen.generatedVideo || gen.generatedImage) && (
-                                        <button onClick={() => navigator.share({ url: gen.generatedVideo || gen.generatedImage, title: gen.productName, text: gen.productDescription })} className="w-full flex gap-2 items-center px-4 py-2 hover:bg-black/10 cursor-pointer">
+                                    {(gen.generatedVideo || gen.generatedImage || (gen.generatedImages && gen.generatedImages.length > 0)) && (
+                                        <button onClick={() => navigator.share({ url: gen.generatedVideo || (gen.generatedImages && gen.generatedImages.length > 0 ? gen.generatedImages[0] : gen.generatedImage), title: gen.productName, text: gen.productDescription })} className="w-full flex gap-2 items-center px-4 py-2 hover:bg-black/10 cursor-pointer">
                                             <Share2Icon size={14} /> Share
                                         </button>
                                     )}

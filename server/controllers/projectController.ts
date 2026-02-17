@@ -32,6 +32,30 @@ const loadImage = (path: string, mimeType: string) => {
     }
 }
 
+// Advertisement Angles Configuration for 3-Image Bundle
+const AD_ANGLES = [
+    {
+        name: "Hero Shot",
+        camera: "Eye-level, front-facing, centered composition, product-focused, professional studio lighting"
+    },
+    {
+        name: "Feature Detail",
+        camera: "Macro side view, 45-degree angle, dramatic lighting showing product details and texture"
+    },
+    {
+        name: "Lifestyle Action",
+        camera: "Dynamic action shot, person actively using the product, natural movement, energetic composition"
+    }
+];
+
+// Model Consistency Instruction for Bundle Generation
+const CONSISTENCY_INSTRUCTION = `
+CRITICAL: The person's facial features, clothing, and overall appearance must be 
+IDENTICAL in all shots to maintain brand continuity. Same person, same outfit, 
+same styling throughout all angles.
+`;
+
+
 
 /**
  * Create Project - Generates AI image from uploaded images
@@ -191,7 +215,7 @@ export const createProject = async (req: Request, res: Response) => {
             projectId: project.id,
             model: 'gemini-3-pro-image-preview',
         });
-// Model Selection
+        // Model Selection
         const model = 'gemini-3-pro-image-preview';
 
         // Safer generation config with lighter load
@@ -422,7 +446,7 @@ export const createVideo = async (req: Request, res: Response) => {
         return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const { projectId } = req.body;
+    const { projectId, selectedImage } = req.body;
     let isCreditDeducted = false;
 
     logger.info('[createVideo] Input validation passed', { userId, projectId });
@@ -521,10 +545,38 @@ export const createVideo = async (req: Request, res: Response) => {
             data: { isGenerating: true }
         })
 
-        const prompt = `make the person showcase the product which is ${project.productName} ${project.productDescription && `and Product Description: ${project.productDescription}`}`
+        const prompt = `
+  ACT AS A PROFESSIONAL CINEMATOGRAPHER AND AD ADVERTISER.
+  
+  SCENE GOAL: Create a high-end, commercial-grade showcase video for ${project.productName}.
+  PRODUCT CONTEXT: ${project.productDescription || 'Premium quality product'}.
+  
+  VISUAL STYLE:
+  - 8k resolution, cinematic lighting, shallow depth of field (bokeh).
+  - The person should interact with the product naturally and enthusiastically.
+  - Use smooth camera movements (slow pan or slight zoom-in).
+  - Lighting should be vibrant and professional ecommerce studio style.
+  - Ensure the product is the focal point of the video.
+
+  USER DIRECTION: ${project.userPrompt || 'Showcase the product effectively.'}
+`;
+
         const model = 'veo-3.1-generate-preview'
 
-        if (!project.generatedImage) {
+        // Determine source image (prefer selected, then single, then bundle default)
+        let sourceImage = selectedImage;
+
+        // Validation: Ensure selected image belongs to project
+        if (selectedImage) {
+            const isValid = selectedImage === project.generatedImage || (project.generatedImages || []).includes(selectedImage);
+            if (!isValid) sourceImage = null;
+        }
+
+        if (!sourceImage) {
+            sourceImage = project.generatedImage || (project.generatedImages && project.generatedImages.length > 0 ? project.generatedImages[0] : null);
+        }
+
+        if (!sourceImage) {
             logger.error('[createVideo] Generated image not found', { userId, projectId });
             throw new Error('Generated image not found');
         }
@@ -533,9 +585,10 @@ export const createVideo = async (req: Request, res: Response) => {
         logger.info('[createVideo] Fetching generated image from Cloudinary', {
             userId,
             projectId,
-            imageUrl: project.generatedImage,
+            imageUrl: sourceImage,
+            isBundle: !!project.generatedImages && project.generatedImages.length > 0,
         });
-        const image = await axios.get(project.generatedImage, { responseType: 'arraybuffer', })
+        const image = await axios.get(sourceImage, { responseType: 'arraybuffer', })
         const imageBytes: any = Buffer.from(image.data)
         logger.debug('[createVideo] Image fetched and converted to buffer', { userId, projectId });
 
@@ -559,6 +612,12 @@ export const createVideo = async (req: Request, res: Response) => {
                 aspectRatio: project?.aspectRatio || '9:16',
                 numberOfVideos: 1,
                 resolution: '720p',
+                safetySettings: [
+                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' }
+                ]
             }
         })
 
@@ -791,6 +850,410 @@ export const deleteProject = async (req: Request, res: Response) => {
             error: error.message,
             stack: error.stack,
         });
+        Sentry.captureException(error);
+        res.status(500).json({ message: error.message });
+    }
+}
+
+/**
+ * Create Project Bundle - Generates 3 AI images with different camera angles
+ * 
+ * Flow: Validate inputs → Check credits (15) → Upload to Cloudinary → 
+ *       Generate 3 images in parallel → Deduct proportional credits → Return project ID
+ */
+export const createProjectBundle = async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    let tempProjectId: string | undefined;
+    const { userId } = getAuth(req);
+
+    // Log request entry with context
+    logger.info('[createProjectBundle] Request received', {
+        userId,
+        requestId: req.requestId,
+        hasFiles: !!req.files,
+        fileCount: (req.files as any)?.length || 0,
+    });
+
+    // Auth validation
+    if (!userId) {
+        logger.warn('[createProjectBundle] Unauthorized access attempt', { requestId: req.requestId });
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    let isCreditDeducted = false;
+    let creditsDeducted = 0;
+
+    const { name = 'New Project', aspectRatio, userPrompt, productName, productDescription, targetLength = 5 } = req.body;
+    const images: any = req.files;
+
+    // Input validation
+    if (images.length < 2 || !productName) {
+        logger.warn('[createProjectBundle] Validation failed - insufficient images or missing product name', {
+            userId,
+            imageCount: images.length,
+            hasProductName: !!productName,
+        });
+        return res.status(400).json({ message: 'Please upload at least 2 images' });
+    }
+
+    logger.info('[createProjectBundle] Input validation passed', {
+        userId,
+        projectName: name,
+        aspectRatio,
+        productName,
+        imageCount: images.length,
+    });
+
+    // Database query: Get or create user with proper error handling
+    logger.debug('[createProjectBundle] Fetching user from database', { userId });
+    let user = await prisma.user.findUnique({
+        where: { id: userId }
+    })
+
+    // Handle race condition: if webhook hasn't created user yet, create them
+    if (!user) {
+        logger.warn('[createProjectBundle] User not found in database - auto-creating', { userId });
+        try {
+            user = await prisma.user.create({
+                data: {
+                    id: userId,
+                    email: 'pending@clerk.sync', // Will be updated by webhook
+                    name: 'Pending Sync',
+                    image: '',
+                    credits: 40
+                }
+            });
+            logger.info('[createProjectBundle] User auto-created successfully', {
+                userId,
+                initialCredits: 40,
+            });
+        } catch (error: any) {
+            logger.error('[createProjectBundle] Failed to auto-create user', {
+                userId,
+                error: error.message,
+                stack: error.stack,
+            });
+            return res.status(500).json({ message: 'Failed to initialize user account. Please try again.' });
+        }
+    } else {
+        logger.debug('[createProjectBundle] User found', { userId, credits: user.credits });
+    }
+
+    // Credit validation (15 credits required for 3-image bundle)
+    if (user.credits < 15) {
+        logger.warn('[createProjectBundle] Insufficient credits', {
+            userId,
+            currentCredits: user.credits,
+            requiredCredits: 15,
+        });
+        return res.status(403).json({ message: 'Insufficient credits. You need at least 15 credits to generate a 3-image bundle.' })
+    }
+
+    // Spam prevention: check if user already has a running generation
+    logger.debug('[createProjectBundle] Checking for existing running generations', { userId });
+    const existingRunning = await prisma.project.findFirst({
+        where: { userId, isGenerating: true }
+    });
+
+    if (existingRunning) {
+        logger.warn('[createProjectBundle] Generation already in progress - rejecting request', {
+            userId,
+            existingProjectId: existingRunning.id,
+        });
+        return res.status(429).json({ message: 'Generation already running' });
+    }
+
+    logger.info('[createProjectBundle] All validations passed - proceeding with bundle generation', { userId });
+
+    try {
+        // External API call: Upload images to Cloudinary
+        const cloudinaryStartTime = Date.now();
+        logger.info('[createProjectBundle] Starting Cloudinary upload', {
+            userId,
+            imageCount: images.length,
+        });
+
+        let uploadedImages = await Promise.all(
+            images.map(async (item: any) => {
+                let result = await cloudinary.uploader.upload(item.path, { resource_type: 'image' });
+                return result.secure_url
+            })
+        )
+
+        const cloudinaryDuration = Date.now() - cloudinaryStartTime;
+        logger.info('[createProjectBundle] Cloudinary upload completed', {
+            userId,
+            imageCount: uploadedImages.length,
+            duration: `${cloudinaryDuration}ms`,
+        });
+
+        // Database operation: Create project record
+        logger.info('[createProjectBundle] Creating project record in database', {
+            userId,
+            projectName: name,
+            aspectRatio,
+        });
+
+        const project = await prisma.project.create({
+            data: {
+                name,
+                userId,
+                productName,
+                productDescription,
+                userPrompt,
+                aspectRatio,
+                targetLength: parseInt(targetLength),
+                uploadedImages,
+                isGenerating: true
+            }
+        })
+
+        tempProjectId = project.id;
+        logger.info('[createProjectBundle] Project created successfully', {
+            userId,
+            projectId: project.id,
+            model: 'gemini-3-pro-image-preview',
+        });
+
+        // Model Selection
+        const model = 'gemini-3-pro-image-preview';
+
+        // Generation config for bundle
+        const generationConfig: GenerateContentConfig = {
+            maxOutputTokens: 2048,
+            temperature: 0.8,
+            topP: 0.9,
+            responseModalities: ['IMAGE'],
+            imageConfig: {
+                aspectRatio: aspectRatio || '9:16',
+                imageSize: '512'
+            },
+            safetySettings: [
+                {
+                    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    threshold: HarmBlockThreshold.OFF,
+                },
+                {
+                    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold: HarmBlockThreshold.OFF,
+                },
+                {
+                    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    threshold: HarmBlockThreshold.OFF,
+                },
+                {
+                    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    threshold: HarmBlockThreshold.OFF,
+                },
+            ]
+        }
+
+        // Prepare images for AI model (convert to base64)
+        logger.debug('[createProjectBundle] Converting images to base64 for AI model', { userId });
+        const img1base64 = loadImage(images[0].path, images[0].mimetype);
+        const img2base64 = loadImage(images[1].path, images[1].mimetype);
+
+        // Base prompt for all angles
+        const basePrompt = `Combine the person and product into a realistic photo.
+            Make the person naturally hold or use the product.
+            Match lighting, shadows, scale and perspective.
+            Make the person stand in professional studio lighting.
+            Output ecommerce-quality photo realistic imagery.
+            ${CONSISTENCY_INSTRUCTION}
+            ${userPrompt}`;
+
+        // External API call: Generate 3 images in parallel with different camera angles
+        const aiStartTime = Date.now();
+        logger.info('[createProjectBundle] Starting parallel AI image generation for 3 angles', {
+            userId,
+            projectId: project.id,
+            model,
+            angles: AD_ANGLES.map(a => a.name),
+        });
+
+        // Generate 3 images in parallel using Promise.allSettled for graceful degradation
+        const generationPromises = AD_ANGLES.map(async (angle) => {
+            const specificPrompt = {
+                text: `${basePrompt}
+                CAMERA ANGLE: ${angle.camera}
+                SCENE TYPE: ${angle.name}`
+            };
+
+            try {
+                logger.debug(`[createProjectBundle] Starting generation for ${angle.name}`, { userId, projectId: project.id });
+
+                const response = await withTimeout(
+                    ai.models.generateContent({
+                        model,
+                        contents: [img1base64, img2base64, specificPrompt],
+                        config: generationConfig,
+                    }),
+                    90000 // 90 second timeout for bundle generation
+                );
+
+                logger.info(`[createProjectBundle] ${angle.name} generation completed`, { userId, projectId: project.id });
+                return { status: 'fulfilled' as const, value: response, angle: angle.name };
+            } catch (error: any) {
+                logger.warn(`[createProjectBundle] ${angle.name} generation failed`, {
+                    userId,
+                    projectId: project.id,
+                    error: error.message,
+                    angle: angle.name,
+                });
+                return { status: 'rejected' as const, reason: error, angle: angle.name };
+            }
+        });
+
+        const results = await Promise.allSettled(generationPromises);
+
+        const aiDuration = Date.now() - aiStartTime;
+        logger.info('[createProjectBundle] All parallel generations completed', {
+            userId,
+            projectId: project.id,
+            duration: `${aiDuration}ms`,
+        });
+
+        // Process successful images
+        const successfulImages: string[] = [];
+        const failedAngles: string[] = [];
+
+        for (const result of results) {
+            if (result.status === 'fulfilled' && result.value.status === 'fulfilled') {
+                const response = result.value.value;
+                const parts = response?.candidates?.[0]?.content?.parts || [];
+                const imagePart = parts.find((p: any) => p.inlineData?.data);
+
+                if (imagePart) {
+                    try {
+                        const finalBuffer = Buffer.from(imagePart.inlineData.data, 'base64');
+                        const base64Image = `data:image/png;base64,${finalBuffer.toString('base64')}`;
+
+                        // Upload to Cloudinary
+                        const uploadResult = await cloudinary.uploader.upload(base64Image, { resource_type: 'image' });
+                        successfulImages.push(uploadResult.secure_url);
+                        logger.info(`[createProjectBundle] ${result.value.angle} uploaded successfully`, {
+                            userId,
+                            projectId: project.id,
+                            imageUrl: uploadResult.secure_url,
+                        });
+                    } catch (uploadError: any) {
+                        logger.error(`[createProjectBundle] Failed to upload ${result.value.angle}`, {
+                            userId,
+                            projectId: project.id,
+                            error: uploadError.message,
+                        });
+                        failedAngles.push(result.value.angle);
+                    }
+                } else {
+                    logger.warn(`[createProjectBundle] No image data in ${result.value.angle} response`, {
+                        userId,
+                        projectId: project.id,
+                    });
+                    failedAngles.push(result.value.angle);
+                }
+            } else if (result.status === 'rejected') {
+                failedAngles.push('Unknown angle');
+            } else if (result.value.status === 'rejected') {
+                failedAngles.push(result.value.angle);
+            }
+        }
+
+        // Check if at least one image succeeded
+        if (successfulImages.length === 0) {
+            logger.error('[createProjectBundle] All image generations failed', {
+                userId,
+                projectId: project.id,
+                failedAngles,
+            });
+            throw new Error('All image generations failed. Please try again.');
+        }
+
+        // Deduct proportional credits (5 per successful image)
+        creditsDeducted = successfulImages.length * 5;
+        await prisma.user.update({
+            where: { id: userId },
+            data: { credits: { decrement: creditsDeducted } }
+        });
+        isCreditDeducted = true;
+
+        logger.info('[createProjectBundle] Credits deducted successfully', {
+            userId,
+            creditsDeducted,
+            successfulImages: successfulImages.length,
+            failedImages: failedAngles.length,
+        });
+
+        // Update project with generated images
+        await prisma.project.update({
+            where: { id: project.id },
+            data: {
+                generatedImages: successfulImages,
+                isGenerating: false
+            }
+        })
+        logger.info('[createProjectBundle] Project updated with generated images', {
+            userId,
+            projectId: project.id,
+            imageCount: successfulImages.length,
+        });
+
+        // Cleanup: Remove temporary uploaded files
+        logger.debug('[createProjectBundle] Cleaning up temporary files', {
+            userId,
+            fileCount: images.length,
+        });
+        images.forEach((f: any) => fs.unlink(f.path, () => { }));
+
+        const totalDuration = Date.now() - startTime;
+        logger.info('[createProjectBundle] Request completed successfully', {
+            userId,
+            projectId: project.id,
+            totalDuration: `${totalDuration}ms`,
+            successfulImages: successfulImages.length,
+            failedImages: failedAngles.length,
+        });
+
+        res.json({
+            projectId: project.id,
+            imagesGenerated: successfulImages.length,
+            failedAngles: failedAngles.length > 0 ? failedAngles : undefined
+        })
+
+    } catch (error: any) {
+        // Error handling with rollback logic
+        logger.error('[createProjectBundle] Request failed with error', {
+            userId,
+            projectId: tempProjectId,
+            error: error.message,
+            stack: error.stack,
+            isCreditDeducted,
+            creditsDeducted,
+        });
+
+        if (tempProjectId!) {
+            // Database operation: Update project status with error
+            logger.info('[createProjectBundle] Updating project with error status', {
+                userId,
+                projectId: tempProjectId,
+            });
+            await prisma.project.update({
+                where: { id: tempProjectId },
+                data: { isGenerating: false, error: error.message }
+            })
+        }
+
+        if (isCreditDeducted && creditsDeducted > 0) {
+            // Database operation: Refund credits on failure
+            logger.info('[createProjectBundle] Refunding credits due to error', {
+                userId,
+                creditsToRefund: creditsDeducted,
+            });
+            await prisma.user.update({
+                where: { id: userId },
+                data: { credits: { increment: creditsDeducted } }
+            })
+            logger.info('[createProjectBundle] Credits refunded successfully', { userId });
+        }
         Sentry.captureException(error);
         res.status(500).json({ message: error.message });
     }
