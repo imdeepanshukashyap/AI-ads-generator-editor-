@@ -256,8 +256,8 @@ cd server
 npm run server
 
 # Test endpoints with curl
-curl -X GET http://localhost:5000/
-curl -X GET http://localhost:5000/api/project/published
+curl -X GET http://localhost:5001/
+curl -X GET http://localhost:5001/api/project/published
 
 # Check logs
 tail -f logs/combined.log
@@ -426,7 +426,7 @@ cd server && npx prisma studio
 - Server: `server/.env`
 
 **API Endpoints**:
-- Base URL: `http://localhost:5000`
+- Base URL: `http://localhost:5001`
 - Create project: `POST /api/project/create`
 - Generate video: `POST /api/project/video`
 - Get credits: `GET /api/user/credits`

@@ -588,14 +588,14 @@ CLOUDINARY_API_SECRET="your_secret"
 SENTRY_DSN="https://...@sentry.io/..."
 
 # Server
-PORT=5000
+PORT=5001
 NODE_ENV="development"
 LOG_LEVEL="info"
 ```
 
 **Client** (`.env`):
 ```env
-VITE_BASEURL="http://localhost:5000"
+VITE_BASEURL="http://localhost:5001"
 VITE_CLERK_PUBLISHABLE_KEY="pk_test_..."
 ```
 
@@ -694,7 +694,7 @@ npm run dev
 # Terminal 2 (Server)
 cd server
 npm run server
-# Runs on http://localhost:5000
+# Runs on http://localhost:5001
 
 # 6. Open browser
 # Navigate to http://localhost:5173
