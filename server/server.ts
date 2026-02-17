@@ -7,6 +7,7 @@ import clerkWebhooks from './controllers/clerk.js';
 import * as Sentry from "@sentry/node"
 import userRouter from "./routes/userRoutes.js";
 import projectRouter from "./routes/projectRoutes.js";
+import paymentRouter from "./routes/paymentRoutes.js";
 import logger from './configs/logger.js';
 import { requestLogger, errorLogger } from './middlewares/requestLogger.js';
 
@@ -60,6 +61,9 @@ logger.info('User routes registered at /api/user');
 
 app.use('/api/project', projectRouter)
 logger.info('Project routes registered at /api/project');
+
+app.use('/api/payment', paymentRouter)
+logger.info('Payment routes registered at /api/payment');
 
 // Error logging middleware (before Sentry error handler)
 app.use(errorLogger);

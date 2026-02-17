@@ -21,12 +21,12 @@ export const featuresData = [
 export const plansData = [
     {
         id: 'starter',
-        name: 'Starter',
-        price: '$10',
-        desc: 'Try the platform at no cost.',
-        credits: 25,
+        name: 'Free',
+        price: '$0',
+        desc: 'Always free',
+        credits: 20,
         features: [
-            '25 Credits',
+            '20 Free Credits',
             'Standard quality',
             'No watermark',
             'Slower generation speed',
@@ -36,29 +36,29 @@ export const plansData = [
     {
         id: 'pro',
         name: 'Pro',
-        price: '$29',
-        desc: 'Creators & small teams.',
+        price: '$9',
+        desc: 'Only billed monthly',
         credits: 80,
         features: [
-            '80 Credits', 
-            'HD quality', 
-            'No watermark', 
-            'Video generation', 
+            '80 Monthly Credits',
+            'HD quality',
+            'No watermark',
+            'Video generation',
             'Priority support'
         ],
         popular: true
     },
     {
         id: 'ultra',
-        name: 'Ultra',
-        price: '$99',
-        desc: 'Scale across teams and agencies.',
-        credits: 300,
+        name: 'Premium',
+        price: '$29',
+        desc: 'Only billed monthly',
+        credits: 240,
         features: [
-            '300 Credits', 
-            'FHD quality', 
-            'No watermark', 
-            'Fast generation speed', 
+            'No watermark',
+            '240 Monthly Credits',
+            'FHD quality',
+            'Fast generation speed',
             'Chat + Email support'
         ]
     }

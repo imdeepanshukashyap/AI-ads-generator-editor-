@@ -15,7 +15,10 @@ model User {
   credits   Int       @default(20)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  projects  Project[]
+
+  // Relations
+  projects     Project[]
+  transactions Transaction[]
 }
 
 model Project {
@@ -37,4 +40,22 @@ model Project {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Transaction {
+  id                String   @id @default(uuid())
+  userId            String
+  planId            String
+  planName          String
+  amount            Int      // Amount in smallest currency unit (paise for INR)
+  credits           Int
+  razorpayOrderId   String   @unique
+  razorpayPaymentId String?
+  razorpaySignature String?
+  status            String   @default("pending") // pending, success, failed
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
