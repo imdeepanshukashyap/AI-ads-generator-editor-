@@ -84,7 +84,7 @@ export const createProject = async (req: Request, res: Response) => {
 
     let isCreditDeducted = false;
 
-    const { name = 'New Project', aspectRatio, userPrompt, productName, productDescription, targetLength = 5 } = req.body;
+    const { name = 'New Project', aspectRatio, userPrompt, productName, productDescription, targetLength = 5, language = 'English' } = req.body;
     const images: any = req.files;
 
     // Input validation
@@ -204,6 +204,7 @@ export const createProject = async (req: Request, res: Response) => {
                 userPrompt,
                 aspectRatio,
                 targetLength: parseInt(targetLength),
+                language,
                 uploadedImages,
                 isGenerating: true
             }
@@ -545,6 +546,17 @@ export const createVideo = async (req: Request, res: Response) => {
             data: { isGenerating: true }
         })
 
+        // Language-specific narration instructions
+        const languageInstructions: Record<string, string> = {
+            'English': 'Narrate in clear, professional English.',
+            'Hindi': 'Narrate in Hindi language (हिंदी में बोलें). Use natural, conversational Hindi.',
+            'Hinglish': 'Narrate in Hinglish - a natural mix of Hindi and English commonly used in India. Use English words for technical/modern terms and Hindi for conversational flow. Example: "Yeh product bahut amazing hai, iska quality top-notch hai."',
+            'Spanish': 'Narrate in Spanish language (español). Use clear, professional Spanish.',
+            'French': 'Narrate in French language (français). Use clear, professional French.'
+        };
+
+        const languageInstruction = languageInstructions[project.language || 'English'] || languageInstructions['English'];
+
         const prompt = `
   ACT AS A PROFESSIONAL CINEMATOGRAPHER AND AD ADVERTISER.
   
@@ -557,6 +569,9 @@ export const createVideo = async (req: Request, res: Response) => {
   - Use smooth camera movements (slow pan or slight zoom-in).
   - Lighting should be vibrant and professional ecommerce studio style.
   - Ensure the product is the focal point of the video.
+
+  NARRATION LANGUAGE:
+  ${languageInstruction}
 
   USER DIRECTION: ${project.userPrompt || 'Showcase the product effectively.'}
 `;
@@ -611,13 +626,7 @@ export const createVideo = async (req: Request, res: Response) => {
             config: {
                 aspectRatio: project?.aspectRatio || '9:16',
                 numberOfVideos: 1,
-                resolution: '720p',
-                safetySettings: [
-                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
-                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
-                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' }
-                ]
+                resolution: '720p'
             }
         })
 
@@ -883,7 +892,7 @@ export const createProjectBundle = async (req: Request, res: Response) => {
     let isCreditDeducted = false;
     let creditsDeducted = 0;
 
-    const { name = 'New Project', aspectRatio, userPrompt, productName, productDescription, targetLength = 5 } = req.body;
+    const { name = 'New Project', aspectRatio, userPrompt, productName, productDescription, targetLength = 5, language = 'English' } = req.body;
     const images: any = req.files;
 
     // Input validation
@@ -1003,6 +1012,7 @@ export const createProjectBundle = async (req: Request, res: Response) => {
                 userPrompt,
                 aspectRatio,
                 targetLength: parseInt(targetLength),
+                language,
                 uploadedImages,
                 isGenerating: true
             }

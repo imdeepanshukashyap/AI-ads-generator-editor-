@@ -200,7 +200,16 @@ const Result = () => {
                                 <VideoIcon className="size-24" />
                             </div>
                             <h3 className="text-xl font-semibold mb-2">Video Magic</h3>
-                            <p className="text-gray-400 text-sm mb-6">Turn this static image into a dynamic video for social media.</p>
+                            <p className="text-gray-400 text-sm mb-2">Turn this static image into a dynamic video for social media.</p>
+
+                            {/* Language Badge */}
+                            {project.language && (
+                                <div className="mb-4 inline-flex items-center gap-2 px-3 py-1.5 bg-violet-500/10 border border-violet-500/20 rounded-lg">
+                                    <span className="text-xs text-violet-300">Narration:</span>
+                                    <span className="text-xs font-medium text-violet-200">{project.language}</span>
+                                </div>
+                            )}
+
                             {!project.generatedVideo ? (
                                 <PrimaryButton onClick={handleGenerateVideo} disabled={isGenerating} className="w-full">
                                     {isGenerating ? (

@@ -24,6 +24,7 @@ export interface Project {
     userPrompt?: string;
     aspectRatio: string;
     targetLength?: number;
+    language?: string;
     generatedImage?: string;          // Single image generation (5 credits)
     generatedImages?: string[];       // 3-image bundle generation (15 credits)
     generatedVideo?: string;

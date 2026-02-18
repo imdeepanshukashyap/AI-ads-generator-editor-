@@ -22,6 +22,7 @@ const Genetator = () => {
   const [productImage, setProductImage] = useState<File | null>(null)
   const [modelImage, setModelImage] = useState<File | null>(null)
   const [userPrompt, setUserPrompt] = useState('')
+  const [language, setLanguage] = useState('English')
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationType, setGenerationType] = useState<'single' | 'bundle'>('single') // New state for generation type
 
@@ -48,6 +49,7 @@ const Genetator = () => {
       formData.append('productDescription', productDescription)
       formData.append('userPrompt', userPrompt)
       formData.append('aspectRatio', aspectRatio)
+      formData.append('language', language)
       formData.append('images', productImage)
       formData.append('images', modelImage)
 
@@ -118,6 +120,23 @@ const Genetator = () => {
 
               <textarea id="userPrompt" rows={4} value={userPrompt} onChange={(e) => setUserPrompt(e.target.value)} placeholder="Describe how you want the narration to be."
                 className="w-full bg-white/3 rounded-lg border-2 p-4 text-sm border-violet-200/10 focus:border-violet-500/50 outline-none resize-none transition-all" />
+            </div>
+
+            {/* Language Selection */}
+            <div className="mb-4 text-gray-300">
+              <label htmlFor="language" className="block text-sm mb-4">Narration Language <span className="text-xs text-violet-400">(for video generation)</span></label>
+              <select
+                id="language"
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="w-full bg-white/3 rounded-lg border-2 p-4 text-sm border-violet-200/10 focus:border-violet-500/50 outline-none transition-all cursor-pointer"
+              >
+                <option value="English" className="bg-gray-900">English</option>
+                <option value="Hindi" className="bg-gray-900">Hindi (हिंदी)</option>
+                <option value="Hinglish" className="bg-gray-900">Hinglish (Hindi + English)</option>
+                <option value="Spanish" className="bg-gray-900">Spanish (Español)</option>
+                <option value="French" className="bg-gray-900">French (Français)</option>
+              </select>
             </div>
 
             {/* Generation Type Selector */}

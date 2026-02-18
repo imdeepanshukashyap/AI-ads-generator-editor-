@@ -30,6 +30,7 @@ model Project {
   userPrompt         String   @default("")
   aspectRatio        String   @default("9:16")
   targetLength       Int      @default(5)
+  language           String   @default("English")
   uploadedImages     String[]
   generatedImage     String   @default("")      // Single image generation (5 credits)
   generatedImages    String[] @default([])      // 3-image bundle generation (15 credits)
