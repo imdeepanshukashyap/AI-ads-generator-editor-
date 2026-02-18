@@ -73,13 +73,13 @@ Sentry.setupExpressErrorHandler(app);
 logger.info('Sentry error handler registered');
 
 // Start server
-const server = app.listen(PORT, '127.0.0.1', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`Server started successfully`, {
     port: PORT,
-    url: `http://127.0.0.1:${PORT}`,
+    url: `http://0.0.0.0:${PORT}`,
     timeout: '300000ms (5 minutes)',
   });
-  console.log(`Server is running at http://127.0.0.1:${PORT}`);
+  console.log(`Server is running at http://0.0.0.0:${PORT}`);
 });
 
 // Set server timeout (5 minutes for long-running AI operations)
