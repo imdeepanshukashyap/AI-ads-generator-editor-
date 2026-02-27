@@ -1,5 +1,5 @@
 import express from 'express';
-import { createProject, createProjectBundle, createVideo, deleteProject, getAllPublishedProjects } from '../controllers/projectController.js';
+import { createProject, createProjectBundle, createVideo, deleteProject, getAllPublishedProjects, resetGeneration } from '../controllers/projectController.js';
 import { protect } from '../middlewares/auth.js';
 import upload from '../configs/multer.js';
 import logger from '../configs/logger.js';
@@ -14,6 +14,7 @@ projectRouter.post('/create-bundle', upload.array('images', 2), protect, createP
 projectRouter.post('/video', protect, createVideo)
 projectRouter.get('/published', getAllPublishedProjects)
 projectRouter.delete('/:projectId', protect, deleteProject)
+projectRouter.post('/reset-generation', protect, resetGeneration)
 
 logger.info('[projectRoutes] Project routes registered successfully');
 
