@@ -151,7 +151,14 @@ export const createProject = async (req: Request, res: Response) => {
     }
 
     // Spam prevention: check if user already has a running generation
+    // Auto-reset locks older than 5 minutes (they are stale from a crash/timeout)
     logger.debug('[createProject] Checking for existing running generations', { userId });
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    await prisma.project.updateMany({
+        where: { userId, isGenerating: true, updatedAt: { lt: fiveMinutesAgo } },
+        data: { isGenerating: false, error: 'Generation timed out (auto-reset)' }
+    });
+
     const existingRunning = await prisma.project.findFirst({
         where: { userId, isGenerating: true }
     });
@@ -214,21 +221,16 @@ export const createProject = async (req: Request, res: Response) => {
         logger.info('[createProject] Project created successfully', {
             userId,
             projectId: project.id,
-            model: 'gemini-3-pro-image-preview',
+            model: 'gemini-3.1-flash-image-preview',
         });
         // Model Selection
-        const model = 'gemini-3-pro-image-preview';
+        const model = 'gemini-3.1-flash-image-preview';
 
-        // Safer generation config with lighter load
+        // Safer generation config
         const generationConfig: GenerateContentConfig = {
-            maxOutputTokens: 2048, // Reduced from 8192
-            temperature: 0.8,
-            topP: 0.9,
-            responseModalities: ['IMAGE'],
-            imageConfig: {
-                aspectRatio: aspectRatio || '9:16',
-                imageSize: '512' // Reduced from 1K for preview model safety
-            },
+            temperature: 1,
+            topP: 0.95,
+            responseModalities: ['TEXT', 'IMAGE'],
             safetySettings: [
                 {
                     category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
@@ -959,7 +961,14 @@ export const createProjectBundle = async (req: Request, res: Response) => {
     }
 
     // Spam prevention: check if user already has a running generation
+    // Auto-reset locks older than 2 minutes (stale from crash/timeout)
     logger.debug('[createProjectBundle] Checking for existing running generations', { userId });
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+    await prisma.project.updateMany({
+        where: { userId, isGenerating: true, updatedAt: { lt: twoMinutesAgo } },
+        data: { isGenerating: false, error: 'Generation timed out (auto-reset)' }
+    });
+
     const existingRunning = await prisma.project.findFirst({
         where: { userId, isGenerating: true }
     });
@@ -1022,22 +1031,17 @@ export const createProjectBundle = async (req: Request, res: Response) => {
         logger.info('[createProjectBundle] Project created successfully', {
             userId,
             projectId: project.id,
-            model: 'gemini-3-pro-image-preview',
+            model: 'gemini-3.1-flash-image-preview',
         });
 
         // Model Selection
-        const model = 'gemini-3-pro-image-preview';
+        const model = 'gemini-3.1-flash-image-preview';
 
         // Generation config for bundle
         const generationConfig: GenerateContentConfig = {
-            maxOutputTokens: 2048,
-            temperature: 0.8,
-            topP: 0.9,
-            responseModalities: ['IMAGE'],
-            imageConfig: {
-                aspectRatio: aspectRatio || '9:16',
-                imageSize: '512'
-            },
+            temperature: 1,
+            topP: 0.95,
+            responseModalities: ['TEXT', 'IMAGE'],
             safetySettings: [
                 {
                     category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
@@ -1265,6 +1269,40 @@ export const createProjectBundle = async (req: Request, res: Response) => {
             logger.info('[createProjectBundle] Credits refunded successfully', { userId });
         }
         Sentry.captureException(error);
+        res.status(500).json({ message: error.message });
+    }
+}
+
+/**
+ * Reset Generation Lock
+ * 
+ * Clears any stuck isGenerating=true flags for the current user.
+ * Use this when "Generation already running" blocks new requests after a crash/timeout.
+ */
+export const resetGeneration = async (req: Request, res: Response) => {
+    const { userId } = getAuth(req);
+
+    if (!userId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    try {
+        const result = await prisma.project.updateMany({
+            where: { userId, isGenerating: true },
+            data: { isGenerating: false, error: 'Generation reset by user' }
+        });
+
+        logger.info('[resetGeneration] Cleared stuck generation locks', {
+            userId,
+            count: result.count,
+        });
+
+        res.json({ message: `Cleared ${result.count} stuck generation(s). You can now generate again.` });
+    } catch (error: any) {
+        logger.error('[resetGeneration] Failed to reset generation locks', {
+            userId,
+            error: error.message,
+        });
         res.status(500).json({ message: error.message });
     }
 }
