@@ -5,7 +5,7 @@ import { v2 as cloudinary } from 'cloudinary'
 import { GenerateContentConfig, HarmBlockThreshold, HarmCategory } from '@google/genai'
 import fs from 'fs';
 import path from 'path';
-import ai from '../configs/ai.js';
+import ai, { isKeyExhaustedError } from '../configs/ai.js';
 import axios from 'axios';
 import { getAuth } from '@clerk/express';
 import logger from '../configs/logger.js';
@@ -18,10 +18,12 @@ const withTimeout = (promise: Promise<any>, ms: number) => {
     return Promise.race([promise, timeout]);
 };
 
-const isQuotaError = (err: any) => {
-    const msg = err?.message?.toLowerCase() || '';
-    return msg.includes('quota') || msg.includes('rate limit');
-};
+/**
+ * Delegates to the centralised isKeyExhaustedError from configs/ai.ts.
+ * Detects quota exhaustion, billing issues, rate limits, and invalid keys
+ * so the controller and the AI config stay in sync.
+ */
+const isQuotaError = (err: any) => isKeyExhaustedError(err);
 
 const loadImage = (path: string, mimeType: string) => {
     return {

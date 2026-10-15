@@ -24,28 +24,48 @@ logger.info('Starting UGC Project Server', {
 });
 
 // Middleware - CORS
-// CLIENT_URL can be a comma-separated list of allowed origins, e.g.:
-//   "https://myapp.vercel.app,http://localhost:5173"
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
+// Supports:
+// 1. Explicit origins configured in CLIENT_URL (comma-separated, e.g. "https://mycustomdomain.com,https://app.vercel.app")
+// 2. All Vercel deployments (production, branch, and preview deployments *.vercel.app)
+// 3. Local development origins (localhost, 127.0.0.1 on any port)
+const configuredOrigins = (process.env.CLIENT_URL || '')
   .split(',')
-  .map(origin => origin.trim())
+  .map(origin => origin.trim().replace(/\/$/, '')) // strip trailing slash if present
   .filter(Boolean);
 
-logger.info('CORS allowed origins', { allowedOrigins });
+const isOriginAllowed = (origin: string): boolean => {
+  // Allow all localhost / loopback addresses on any port for local development
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+    return true;
+  }
+  // Allow all Vercel deployment and preview URLs (*.vercel.app)
+  if (/^https:\/\/([a-zA-Z0-9_-]+\.)*vercel\.app$/.test(origin)) {
+    return true;
+  }
+  // Allow explicitly configured origins in CLIENT_URL
+  if (configuredOrigins.includes(origin)) {
+    return true;
+  }
+  return false;
+};
+
+logger.info('CORS configuration loaded', { configuredOrigins });
 
 app.use(cors({
   origin: (requestOrigin, callback) => {
     // Allow requests with no origin (mobile apps, curl, Postman, server-to-server)
     if (!requestOrigin) return callback(null, true);
 
-    if (allowedOrigins.includes(requestOrigin)) {
+    if (isOriginAllowed(requestOrigin)) {
       return callback(null, true);
     }
 
-    logger.warn('CORS blocked request from disallowed origin', { requestOrigin, allowedOrigins });
-    return callback(new Error(`CORS: Origin '${requestOrigin}' is not allowed`));
+    logger.warn('CORS blocked request from disallowed origin', { requestOrigin, configuredOrigins });
+    return callback(null, false);
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
 }));
 logger.info('CORS middleware registered');
 
