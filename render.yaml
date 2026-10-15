@@ -3,13 +3,15 @@ services:
     name: ai-ads-generator-api
     runtime: node
     rootDir: server
-    buildCommand: npm install && npx prisma generate
-    startCommand: npm start
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm run start:prod
     healthCheckPath: /
     envVars:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
         sync: false
       - key: CLERK_PUBLISHABLE_KEY
         sync: false
@@ -19,7 +21,9 @@ services:
         sync: false
       - key: CLOUDINARY_URL
         sync: false
-      - key: GOOGLE_CLOUD_API_KEY
+      - key: GOOGLE_CLOUD_API_KEY1
+        sync: false
+      - key: GOOGLE_CLOUD_API_KEY2
         sync: false
       - key: RAZORPAY_KEY_ID
         sync: false
