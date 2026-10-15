@@ -24,10 +24,29 @@ logger.info('Starting UGC Project Server', {
 });
 
 // Middleware - CORS
+// CLIENT_URL can be a comma-separated list of allowed origins, e.g.:
+//   "https://myapp.vercel.app,http://localhost:5173"
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+logger.info('CORS allowed origins', { allowedOrigins });
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (requestOrigin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, Postman, server-to-server)
+    if (!requestOrigin) return callback(null, true);
+
+    if (allowedOrigins.includes(requestOrigin)) {
+      return callback(null, true);
+    }
+
+    logger.warn('CORS blocked request from disallowed origin', { requestOrigin, allowedOrigins });
+    return callback(new Error(`CORS: Origin '${requestOrigin}' is not allowed`));
+  },
   credentials: true
-}))
+}));
 logger.info('CORS middleware registered');
 
 // Clerk webhook endpoint (must be before express.json to handle raw body)
