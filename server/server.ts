@@ -34,16 +34,22 @@ const configuredOrigins = (process.env.CLIENT_URL || '')
   .filter(Boolean);
 
 const isOriginAllowed = (origin: string): boolean => {
+  const normalizedOrigin = origin.trim().replace(/\/$/, '');
+
   // Allow all localhost / loopback addresses on any port for local development
-  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalizedOrigin)) {
     return true;
   }
   // Allow all Vercel deployment and preview URLs (*.vercel.app)
-  if (/^https:\/\/([a-zA-Z0-9_-]+\.)*vercel\.app$/.test(origin)) {
+  if (/^https:\/\/([a-zA-Z0-9_-]+\.)*vercel\.app$/.test(normalizedOrigin)) {
+    return true;
+  }
+  // Allow custom domain vigyapanai.online (e.g. https://www.vigyapanai.online, https://vigyapanai.online)
+  if (/^https?:\/\/([a-zA-Z0-9_-]+\.)*vigyapanai\.online$/.test(normalizedOrigin)) {
     return true;
   }
   // Allow explicitly configured origins in CLIENT_URL
-  if (configuredOrigins.includes(origin)) {
+  if (configuredOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin)) {
     return true;
   }
   return false;
