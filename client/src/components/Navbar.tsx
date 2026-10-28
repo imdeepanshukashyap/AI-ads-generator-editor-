@@ -61,6 +61,20 @@ export default function Navbar() {
         }
     }, [isLoaded, user, pathname])
 
+    useEffect(() => {
+        setIsOpen(false);
+    }, [pathname])
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setIsOpen(false);
+        };
+        window.addEventListener('keydown', closeOnEscape);
+        return () => window.removeEventListener('keydown', closeOnEscape);
+    }, [isOpen])
+
     return (
         <motion.nav className='fixed top-5 left-0 right-0 z-50 px-4'
             initial={{ y: -100, opacity: 0 }}
@@ -71,7 +85,7 @@ export default function Navbar() {
             <div className='max-w-6xl mx-auto flex items-center justify-between bg-black/50 backdrop-blur-md border border-white/4 rounded-2xl p-3'>
                 <Link to='/' onClick={() => scrollTo(0, 0)} className="flex items-center gap-2">
                     <img src={assets.logo} alt="AdGen Studio logo" className="h-8" />
-                    <span className="text-xl font-bold text-white">AdGen Studio</span>
+                    <span className="hidden min-[420px]:inline text-xl font-bold text-white">AdGen Studio</span>
                 </Link>
 
                 <div className='hidden md:flex items-center gap-8 text-sm font-medium text-gray-300'>
@@ -90,7 +104,7 @@ export default function Navbar() {
                         <PrimaryButton onClick={() => openSignUp()} className='max-sm:text-xs hidden sm:inline-block'>Get Started</PrimaryButton>
                     </div>
                 ) : (
-                    <div className='flex gap-2'>
+                    <div className='hidden md:flex gap-2'>
                         {isAdmin && <GhostButton onClick={() => navigate('/admin')} className='border-none text-violet-300 sm:py-1.5'>
                             <ShieldCheckIcon className='size-4' /> Admin Portal
                         </GhostButton>}
@@ -113,29 +127,58 @@ export default function Navbar() {
                     </div>
                 )}
 
-                {!user && <button onClick={() => setIsOpen(!isOpen)} className='md:hidden'>
-                    <MenuIcon className='size-6' />
+                <button
+                    type='button'
+                    aria-label={isOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                    aria-expanded={isOpen}
+                    aria-controls='mobile-navigation'
+                    onClick={() => setIsOpen((open) => !open)}
+                    className='rounded-lg p-2 text-gray-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 md:hidden'
+                >
+                    {isOpen ? <XIcon className='size-6' /> : <MenuIcon className='size-6' />}
                 </button>
-                }
 
             </div>
-            <div className={`flex flex-col items-center justify-center gap-6 text-lg font-medium fixed inset-0 bg-black/40 backdrop-blur-md z-50 transition-all duration-300 ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
+            <div
+                id='mobile-navigation'
+                role='dialog'
+                aria-modal='true'
+                aria-hidden={!isOpen}
+                aria-label='Mobile navigation'
+                className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-black/95 px-6 text-lg font-medium backdrop-blur-md transition-[transform,visibility] duration-300 md:hidden ${isOpen ? 'visible translate-x-0' : 'invisible translate-x-full pointer-events-none'}`}
+            >
                 {navLinks.map((link) => (
                     <a key={link.name} href={link.href} onClick={() => setIsOpen(false)}>
                         {link.name}
                     </a>
                 ))}
 
-                <button onClick={() => { setIsOpen(false); navigate('/sign-in') }} className='font-medium text-gray-300 hover:text-white transition'>
-                    Sign in
-                </button>
-                <PrimaryButton onClick={() => { setIsOpen(false); openSignUp() }}>Get Started</PrimaryButton>
+                {!user ? (
+                    <>
+                        <button onClick={() => { setIsOpen(false); navigate('/sign-in') }} className='rounded-lg px-4 py-2 font-medium text-gray-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400'>
+                            Sign in
+                        </button>
+                        <PrimaryButton onClick={() => { setIsOpen(false); openSignUp() }}>Get Started</PrimaryButton>
+                    </>
+                ) : (
+                    <div className='flex flex-wrap items-center justify-center gap-3'>
+                        {isAdmin && <GhostButton onClick={() => { setIsOpen(false); navigate('/admin') }}>
+                            <ShieldCheckIcon className='size-4' /> Admin Portal
+                        </GhostButton>}
+                        <GhostButton onClick={() => { setIsOpen(false); navigate('/plans') }}>
+                            Credits: {credits}
+                        </GhostButton>
+                        <UserButton />
+                    </div>
+                )}
 
                 <button
+                    type='button'
+                    aria-label='Close navigation menu'
                     onClick={() => setIsOpen(false)}
-                    className="rounded-md bg-white p-2 text-gray-800 ring-white active:ring-2"
+                    className='absolute right-5 top-5 rounded-lg bg-white/10 p-2 text-white ring-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2'
                 >
-                    <XIcon />
+                    <XIcon aria-hidden='true' />
                 </button>
             </div>
         </motion.nav>
