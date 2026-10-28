@@ -3,7 +3,7 @@ import Home from './pages/Home';
 import SoftBackdrop from './components/SoftBackdrop';
 import Footer from './components/Footer';
 import LenisScroll from './components/lenis';
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import Genetator from './pages/Genetator';
 import Result from './pages/Result';
 import MyGenerations from './pages/MyGenerations';
@@ -13,7 +13,7 @@ import Loading from './pages/Loading';
 import UserSignIn from './pages/UserSignIn';
 import Admin from './pages/Admin';
 import AdminProfile from './pages/AdminProfile';
-import AdminSettings from './pages/AdminSettings';
+import AdminRouteGuard from './components/AdminRouteGuard';
 import {Toaster} from 'react-hot-toast'
 
 function App() {
@@ -33,9 +33,11 @@ function App() {
 				<Route path='/plans' element={<Plans />}/>
 				<Route path='/loading' element={<Loading />}/>
 				<Route path='/sign-in/*' element={<UserSignIn />}/>
-				<Route path='/admin/*' element={<Admin />}/>
-				<Route path='/admin/profile' element={<AdminProfile />}/>
-				<Route path='/admin/settings' element={<AdminSettings />}/>
+				<Route element={<AdminRouteGuard />}>
+					<Route path='/admin/analytics' element={<Navigate to='/admin' replace />}/>
+					<Route path='/admin/*' element={<Admin />}/>
+					<Route path='/admin/profile' element={<AdminProfile />}/>
+				</Route>
 				
 			</Routes>
 

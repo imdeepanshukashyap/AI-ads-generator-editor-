@@ -2,7 +2,7 @@ import { DollarSignIcon, FolderEditIcon, GalleryHorizontalEnd, MenuIcon, ShieldC
 import { GhostButton, PrimaryButton } from './Buttons';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { assets } from '../assets/assets';
 import { useClerk, useUser, UserButton, useAuth } from '@clerk/clerk-react';
 import api from '../configs/axios';
@@ -12,13 +12,13 @@ export default function Navbar() {
 
     const navigate = useNavigate()
     const { user, isLoaded } = useUser()
+    const userId = user?.id;
     const { openSignUp } = useClerk()
-    const [isAdmin, setIsAdmin] = useState(false);
+    const [adminUserId, setAdminUserId] = useState<string | null>(null);
 
     const [isOpen, setIsOpen] = useState(false);
 
-    const [credits, setCredits] = useState(0);
-    const { pathname } = useLocation()
+    const [creditsByUser, setCreditsByUser] = useState<{ userId: string; credits: number } | null>(null);
     const { getToken } = useAuth()
 
     const navLinks = [
@@ -28,42 +28,36 @@ export default function Navbar() {
         { name: 'Plans', href: '/plans' },
     ];
 
-    const getUserCredits = async () => {
-        try {
-            const token = await getToken()
-            const { data } = await api.get('/api/user/credits', { headers: { Authorization: `Bearer ${token}` } })
-            setCredits(data.credits)
-        } catch (error: any) {
-            toast.error(error?.response?.data?.message || error.message)
-            console.log(error);
-        }
-    }
+    const isAdmin = Boolean(userId && adminUserId === userId);
+    const credits = creditsByUser && creditsByUser.userId === userId ? creditsByUser.credits : 0;
 
-    const checkAdminAccess = async () => {
-        try {
+    useEffect(() => {
+        if (!isLoaded || !userId) return;
+
+        let cancelled = false;
+        const loadAccountState = async () => {
             const token = await getToken();
-            await api.get('/api/admin/me', { headers: { Authorization: `Bearer ${token}` } });
-            setIsAdmin(true);
-        } catch {
-            setIsAdmin(false);
-        }
-    }
+            const [creditsResult, adminResult] = await Promise.allSettled([
+                api.get('/api/user/credits', { headers: { Authorization: `Bearer ${token}` } }),
+                api.get('/api/admin/me', { headers: { Authorization: `Bearer ${token}` } }),
+            ]);
 
-    useEffect(() => {
-        if (!isLoaded) return;
+            if (cancelled) return;
 
-        if (user) {
-            void getUserCredits();
-            void checkAdminAccess();
-        } else {
-            setCredits(0);
-            setIsAdmin(false);
-        }
-    }, [isLoaded, user, pathname])
+            if (creditsResult.status === 'fulfilled') {
+                setCreditsByUser({ userId: userId, credits: creditsResult.value.data.credits });
+            } else {
+                toast.error(creditsResult.reason instanceof Error ? creditsResult.reason.message : 'Unable to load credits');
+            }
 
-    useEffect(() => {
-        setIsOpen(false);
-    }, [pathname])
+            setAdminUserId(adminResult.status === 'fulfilled' ? userId : null);
+        };
+
+        void loadAccountState();
+        return () => {
+            cancelled = true;
+        };
+    }, [getToken, isLoaded, userId]);
 
     useEffect(() => {
         if (!isOpen) return;
