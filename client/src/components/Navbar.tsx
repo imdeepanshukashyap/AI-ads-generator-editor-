@@ -1,4 +1,4 @@
-import { DollarSignIcon, FolderEditIcon, GalleryHorizontalEnd, MenuIcon, SparkleIcon, XIcon } from 'lucide-react';
+import { DollarSignIcon, FolderEditIcon, GalleryHorizontalEnd, MenuIcon, ShieldCheckIcon, SparkleIcon, XIcon } from 'lucide-react';
 import { GhostButton, PrimaryButton } from './Buttons';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
@@ -13,6 +13,7 @@ export default function Navbar() {
     const navigate = useNavigate()
     const { user } = useUser()
     const { openSignIn, openSignUp } = useClerk()
+    const [isAdmin, setIsAdmin] = useState(false);
 
     const [isOpen, setIsOpen] = useState(false);
 
@@ -38,9 +39,22 @@ export default function Navbar() {
         }
     }
 
+    const checkAdminAccess = async () => {
+        try {
+            const token = await getToken();
+            await api.get('/api/admin/me', { headers: { Authorization: `Bearer ${token}` } });
+            setIsAdmin(true);
+        } catch {
+            setIsAdmin(false);
+        }
+    }
+
     useEffect(() => {
         if (user) {
             (async () => await getUserCredits())();
+            (async () => await checkAdminAccess())();
+        } else {
+            setIsAdmin(false);
         }
     }, [user, pathname])
 
@@ -67,13 +81,16 @@ export default function Navbar() {
 
                 {!user ? (
                     <div className='hidden md:flex items-center gap-3'>
-                        <button onClick={() => openSignIn()} className='text-sm font-medium text-gray-300 hover:text-white transition max-sm:hidden'>
+                        <button onClick={() => openSignIn()} className='text-sm font-medium text-gray-300 hover:text-white transition'>
                             Sign in
                         </button>
                         <PrimaryButton onClick={() => openSignUp()} className='max-sm:text-xs hidden sm:inline-block'>Get Started</PrimaryButton>
                     </div>
                 ) : (
                     <div className='flex gap-2'>
+                        {isAdmin && <GhostButton onClick={() => navigate('/admin')} className='border-none text-violet-300 sm:py-1.5'>
+                            <ShieldCheckIcon className='size-4' /> Admin Portal
+                        </GhostButton>}
                         <GhostButton onClick={() => navigate('/plans')} className='border-none text-gray-300 sm:py-1.5'>
                             Credits: {credits}
                         </GhostButton>
