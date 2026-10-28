@@ -11,7 +11,7 @@ import toast from 'react-hot-toast';
 export default function Navbar() {
 
     const navigate = useNavigate()
-    const { user } = useUser()
+    const { user, isLoaded } = useUser()
     const { openSignUp } = useClerk()
     const [isAdmin, setIsAdmin] = useState(false);
 
@@ -50,13 +50,16 @@ export default function Navbar() {
     }
 
     useEffect(() => {
+        if (!isLoaded) return;
+
         if (user) {
-            (async () => await getUserCredits())();
-            (async () => await checkAdminAccess())();
+            void getUserCredits();
+            void checkAdminAccess();
         } else {
+            setCredits(0);
             setIsAdmin(false);
         }
-    }, [user, pathname])
+    }, [isLoaded, user, pathname])
 
     return (
         <motion.nav className='fixed top-5 left-0 right-0 z-50 px-4'
