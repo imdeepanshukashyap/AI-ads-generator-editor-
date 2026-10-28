@@ -8,11 +8,17 @@ import * as Sentry from "@sentry/node"
 import userRouter from "./routes/userRoutes.js";
 import projectRouter from "./routes/projectRoutes.js";
 import paymentRouter from "./routes/paymentRoutes.js";
+import adminRouter from "./routes/adminRoutes.js";
+import modelLibraryRouter from "./routes/modelLibraryRoutes.js";
+import helmet from 'helmet';
 import logger from './configs/logger.js';
 import { requestLogger, errorLogger } from './middlewares/requestLogger.js';
+import { adminErrorHandler } from './middlewares/adminError.js';
 
 
 const app = express();
+
+app.use(helmet());
 
 const PORT = Number(process.env.PORT) || 5001;
 
@@ -24,8 +30,22 @@ logger.info('Starting UGC Project Server', {
 });
 
 // Middleware - CORS
+const configuredClientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+const allowedClientUrls = new Set([
+  configuredClientUrl,
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+]);
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin || allowedClientUrls.has(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Origin is not allowed by CORS'));
+  },
   credentials: true
 }))
 logger.info('CORS middleware registered');
@@ -65,7 +85,14 @@ logger.info('Project routes registered at /api/project');
 app.use('/api/payment', paymentRouter)
 logger.info('Payment routes registered at /api/payment');
 
+app.use('/api/admin', adminRouter)
+logger.info('Admin routes registered at /api/admin');
+
+app.use('/api/model-library', modelLibraryRouter)
+logger.info('Model library routes registered at /api/model-library');
+
 // Error logging middleware (before Sentry error handler)
+app.use(adminErrorHandler);
 app.use(errorLogger);
 
 // The error handler must be registered before any other error middleware and after all controllers

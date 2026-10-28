@@ -6,6 +6,9 @@ export interface UploadZoneProps {
     file: File | null;
     onClear: () => void;
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    previewUrl?: string;
+    previewLabel?: string;
+    onChooseLibrary?: () => void;
 }
 
 export interface User {

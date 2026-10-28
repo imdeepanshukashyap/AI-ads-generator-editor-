@@ -13,12 +13,23 @@ model User {
   name      String
   image     String
   credits   Int       @default(20)
+  role      String    @default("USER")
+  status    String    @default("active")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
   // Relations
   projects     Project[]
   transactions Transaction[]
+  adminLogs    AdminLog[]
+  creditTransactions CreditTransaction[] @relation("CreditUser")
+  adminCreditTransactions CreditTransaction[] @relation("CreditAdmin")
+  modelLibraryEntries ModelLibraryEntry[]
+
+  @@index([email])
+  @@index([role])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model Project {
@@ -41,6 +52,11 @@ model Project {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([isGenerating])
+  @@index([isPublished])
 }
 
 model Transaction {
@@ -59,4 +75,72 @@ model Transaction {
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model AdminLog {
+  id          String   @id @default(uuid())
+  adminId     String
+  action      String
+  targetType  String
+  targetId    String?
+  description String
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  admin       User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([action])
+  @@index([targetType])
+  @@index([createdAt])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model ModelLibraryEntry {
+  id          String   @id @default(uuid())
+  name        String
+  description String   @default("")
+  category    String   @default("General")
+  tags        String[] @default([])
+  imageUrl    String
+  imagePublicId String
+  isPublished Boolean  @default(false)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([isPublished])
+  @@index([category])
+  @@index([createdById])
+  @@index([createdAt])
+}
+
+model CreditTransaction {
+  id        String   @id @default(uuid())
+  userId    String
+  adminId   String?
+  projectId String?
+  type      String
+  amount    Int
+  balance   Int
+  reason    String
+  createdAt DateTime @default(now())
+  user      User     @relation("CreditUser", fields: [userId], references: [id], onDelete: Cascade)
+  admin     User?    @relation("CreditAdmin", fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([adminId])
+  @@index([type])
+  @@index([createdAt])
 }
