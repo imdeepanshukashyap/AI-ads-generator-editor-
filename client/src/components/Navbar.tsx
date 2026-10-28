@@ -12,7 +12,7 @@ export default function Navbar() {
 
     const navigate = useNavigate()
     const { user } = useUser()
-    const { openSignIn, openSignUp } = useClerk()
+    const { openSignUp } = useClerk()
     const [isAdmin, setIsAdmin] = useState(false);
 
     const [isOpen, setIsOpen] = useState(false);
@@ -81,7 +81,7 @@ export default function Navbar() {
 
                 {!user ? (
                     <div className='hidden md:flex items-center gap-3'>
-                        <button onClick={() => openSignIn()} className='text-sm font-medium text-gray-300 hover:text-white transition'>
+                        <button onClick={() => navigate('/sign-in')} className='text-sm font-medium text-gray-300 hover:text-white transition'>
                             Sign in
                         </button>
                         <PrimaryButton onClick={() => openSignUp()} className='max-sm:text-xs hidden sm:inline-block'>Get Started</PrimaryButton>
@@ -123,7 +123,7 @@ export default function Navbar() {
                     </a>
                 ))}
 
-                <button onClick={() => { setIsOpen(false); openSignIn() }} className='font-medium text-gray-300 hover:text-white transition'>
+                <button onClick={() => { setIsOpen(false); navigate('/sign-in') }} className='font-medium text-gray-300 hover:text-white transition'>
                     Sign in
                 </button>
                 <PrimaryButton onClick={() => { setIsOpen(false); openSignUp() }}>Get Started</PrimaryButton>

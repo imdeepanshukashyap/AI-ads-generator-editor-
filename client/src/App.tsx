@@ -10,6 +10,10 @@ import MyGenerations from './pages/MyGenerations';
 import Community from './pages/Community';
 import Plans from './pages/Plans';
 import Loading from './pages/Loading';
+import UserSignIn from './pages/UserSignIn';
+import Admin from './pages/Admin';
+import AdminProfile from './pages/AdminProfile';
+import AdminSettings from './pages/AdminSettings';
 import {Toaster} from 'react-hot-toast'
 
 function App() {
@@ -28,6 +32,10 @@ function App() {
 				<Route path='/community' element={<Community />}/>
 				<Route path='/plans' element={<Plans />}/>
 				<Route path='/loading' element={<Loading />}/>
+				<Route path='/sign-in/*' element={<UserSignIn />}/>
+				<Route path='/admin/*' element={<Admin />}/>
+				<Route path='/admin/profile' element={<AdminProfile />}/>
+				<Route path='/admin/settings' element={<AdminSettings />}/>
 				
 			</Routes>
 
