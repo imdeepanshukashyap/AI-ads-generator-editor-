@@ -10,6 +10,12 @@ import MyGenerations from './pages/MyGenerations';
 import Community from './pages/Community';
 import Plans from './pages/Plans';
 import Loading from './pages/Loading';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsAndConditions from './pages/TermsAndConditions';
+import RefundPolicy from './pages/RefundPolicy';
+import Contact from './pages/Contact';
+import About from './pages/About';
+import ShippingPolicy from './pages/ShippingPolicy';
 import {Toaster} from 'react-hot-toast'
 
 function App() {
@@ -28,6 +34,12 @@ function App() {
 				<Route path='/community' element={<Community />}/>
 				<Route path='/plans' element={<Plans />}/>
 				<Route path='/loading' element={<Loading />}/>
+				<Route path='/privacy-policy' element={<PrivacyPolicy />}/>
+				<Route path='/terms-and-conditions' element={<TermsAndConditions />}/>
+				<Route path='/refund-policy' element={<RefundPolicy />}/>
+				<Route path='/contact' element={<Contact />}/>
+				<Route path='/about' element={<About />}/>
+				<Route path='/shipping-policy' element={<ShippingPolicy />}/>
 				
 			</Routes>
 
