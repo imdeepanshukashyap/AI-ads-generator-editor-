@@ -7,7 +7,22 @@
 
 @layer base {
     body {
-        @apply bg-gray-950 text-white antialiased;
+        @apply text-white antialiased;
+        background:
+            radial-gradient(circle at 18% 22%, rgba(91, 57, 155, 0.18), transparent 34rem),
+            radial-gradient(circle at 82% 16%, rgba(76, 55, 145, 0.14), transparent 30rem),
+            radial-gradient(circle at 72% 82%, rgba(124, 58, 237, 0.08), transparent 32rem),
+            #080713;
+        background-attachment: fixed;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+            scroll-behavior: auto !important;
+            transition-duration: 0.01ms !important;
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+        }
     }
 
     button {

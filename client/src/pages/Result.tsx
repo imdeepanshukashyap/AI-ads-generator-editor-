@@ -129,7 +129,7 @@ const Result = () => {
                                                 alt={`Generated ${index + 1}`}
                                                 className="w-full aspect-square object-cover"
                                             />
-                                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                                            <div className="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/60 to-transparent p-2">
                                                 <p className="text-xs text-white font-medium">
                                                     {index === 0 ? 'Hero' : index === 1 ? 'Detail' : 'Action'}
                                                 </p>

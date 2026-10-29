@@ -1,18 +1,24 @@
+import './configs/loadEnv.js';
 import "./configs/instrument.mjs"
 import express, { Request, Response } from 'express';
 import cors from 'cors'
-import 'dotenv/config'
 import { clerkMiddleware } from '@clerk/express'
 import clerkWebhooks from './controllers/clerk.js';
 import * as Sentry from "@sentry/node"
 import userRouter from "./routes/userRoutes.js";
 import projectRouter from "./routes/projectRoutes.js";
 import paymentRouter from "./routes/paymentRoutes.js";
+import adminRouter from "./routes/adminRoutes.js";
+import modelLibraryRouter from "./routes/modelLibraryRoutes.js";
+import helmet from 'helmet';
 import logger from './configs/logger.js';
 import { requestLogger, errorLogger } from './middlewares/requestLogger.js';
+import { adminErrorHandler } from './middlewares/adminError.js';
 
 
 const app = express();
+
+app.use(helmet());
 
 const PORT = Number(process.env.PORT) || 5001;
 
@@ -24,48 +30,27 @@ logger.info('Starting UGC Project Server', {
 });
 
 // Middleware - CORS
-// Supports:
-// 1. Explicit origins configured in CLIENT_URL (comma-separated, e.g. "https://mycustomdomain.com,https://app.vercel.app")
-// 2. All Vercel deployments (production, branch, and preview deployments *.vercel.app)
-// 3. Local development origins (localhost, 127.0.0.1 on any port)
 const configuredOrigins = (process.env.CLIENT_URL || '')
   .split(',')
-  .map(origin => origin.trim().replace(/\/$/, '')) // strip trailing slash if present
+  .map(origin => origin.trim().replace(/\/$/, ''))
   .filter(Boolean);
 
 const isOriginAllowed = (origin: string): boolean => {
   const normalizedOrigin = origin.trim().replace(/\/$/, '');
-
-  // Allow all localhost / loopback addresses on any port for local development
-  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalizedOrigin)) {
-    return true;
-  }
-  // Allow all Vercel deployment and preview URLs (*.vercel.app)
-  if (/^https:\/\/([a-zA-Z0-9_-]+\.)*vercel\.app$/.test(normalizedOrigin)) {
-    return true;
-  }
-  // Allow custom domain vigyapanai.online (e.g. https://www.vigyapanai.online, https://vigyapanai.online)
-  if (/^https?:\/\/([a-zA-Z0-9_-]+\.)*vigyapanai\.online$/.test(normalizedOrigin)) {
-    return true;
-  }
-  // Allow explicitly configured origins in CLIENT_URL
-  if (configuredOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin)) {
-    return true;
-  }
-  return false;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalizedOrigin)) return true;
+  if (/^https:\/\/([a-zA-Z0-9_-]+\.)*vercel\.app$/.test(normalizedOrigin)) return true;
+  if (/^https?:\/\/([a-zA-Z0-9_-]+\.)*vigyapanai\.online$/.test(normalizedOrigin)) return true;
+  return configuredOrigins.some(allowed => allowed === normalizedOrigin);
 };
 
 logger.info('CORS configuration loaded', { configuredOrigins });
 
 app.use(cors({
   origin: (requestOrigin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, Postman, server-to-server)
     if (!requestOrigin) return callback(null, true);
-
     if (isOriginAllowed(requestOrigin)) {
       return callback(null, true);
     }
-
     logger.warn('CORS blocked request from disallowed origin', { requestOrigin, configuredOrigins });
     return callback(null, false);
   },
@@ -110,7 +95,14 @@ logger.info('Project routes registered at /api/project');
 app.use('/api/payment', paymentRouter)
 logger.info('Payment routes registered at /api/payment');
 
+app.use('/api/admin', adminRouter)
+logger.info('Admin routes registered at /api/admin');
+
+app.use('/api/model-library', modelLibraryRouter)
+logger.info('Model library routes registered at /api/model-library');
+
 // Error logging middleware (before Sentry error handler)
+app.use(adminErrorHandler);
 app.use(errorLogger);
 
 // The error handler must be registered before any other error middleware and after all controllers
