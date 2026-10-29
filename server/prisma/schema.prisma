@@ -49,14 +49,18 @@ model Transaction {
   planId            String
   planName          String
   amount            Int      // Amount in smallest currency unit (paise for INR)
+  currency          String   @default("INR")
   credits           Int
   razorpayOrderId   String   @unique
   razorpayPaymentId String?
   razorpaySignature String?
-  status            String   @default("pending") // pending, success, failed
+  status            String   @default("pending") // pending, success (credited), failed, refunded (closed before crediting)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, createdAt])
+  @@index([status, createdAt])
 }

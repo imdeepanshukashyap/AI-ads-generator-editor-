@@ -93,6 +93,10 @@ const clerkWebhooks = async (req: Request, res: Response) => {
                 break;
             }
 
+            // Legacy Clerk Billing path. Checkout moved to Razorpay on 2026-02-18, but
+            // subscriptions started before then may still renew here. Kept until the
+            // Clerk Dashboard confirms there are none; every grant is reported to Sentry
+            // so any remaining use is visible. Not idempotent across redeliveries.
             case "paymentAttempt.updated": {
                 logger.info('[clerkWebhooks] Processing paymentAttempt.updated event', {
                     chargeType: data.charge_type,
@@ -131,10 +135,12 @@ const clerkWebhooks = async (req: Request, res: Response) => {
                         }
                     })
 
-                    logger.info('[clerkWebhooks] Credits added successfully', {
+                    logger.warn('[clerkWebhooks] Credits added via legacy Clerk Billing', {
                         userId: clerkUserId,
                         creditsAdded: credits[planId],
+                        chargeType: data.charge_type,
                     });
+                    Sentry.captureMessage(`Legacy Clerk Billing granted ${credits[planId]} credits (${data.charge_type}, plan ${planId})`, 'warning');
                 }
                 break;
             }
