@@ -1,7 +1,7 @@
+import './configs/loadEnv.js';
 import "./configs/instrument.mjs"
 import express, { Request, Response } from 'express';
 import cors from 'cors'
-import 'dotenv/config'
 import { clerkMiddleware } from '@clerk/express'
 import clerkWebhooks from './controllers/clerk.js';
 import * as Sentry from "@sentry/node"

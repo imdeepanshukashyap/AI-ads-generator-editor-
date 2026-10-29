@@ -51,3 +51,16 @@ test('admin route remains protected by backend authorization', async () => {
     const home = await read('../src/pages/Home.tsx');
     assert.match(home, /This account does not have admin access/);
 });
+
+test('community separates media by reliable project fields', async () => {
+    const community = await read('../src/pages/Community.tsx');
+
+    assert.match(community, /role='tablist'/);
+    assert.match(community, /Image Generations/);
+    assert.match(community, /Video Generations/);
+    assert.match(community, /!project\.generatedVideo && Boolean\(project\.generatedImage \|\| project\.generatedImages\?\.length\)/);
+    assert.match(community, /Boolean\(project\.generatedVideo\)/);
+    assert.match(community, /aria-modal='true'/);
+    assert.match(community, /dialogVideo\.current\?\.pause\(\)/);
+    assert.match(community, /muted\s+loop\s+playsInline/);
+});

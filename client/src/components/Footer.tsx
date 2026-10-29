@@ -46,7 +46,7 @@ export default function Footer() {
                 </div>
 
                 <p className="py-4 text-center text-sm text-gray-400">
-                    © {new Date().getFullYear()} {' '} GreatStack . All rights reserved.
+                    © {new Date().getFullYear()} {' '} AdGen Studio . All rights reserved.
                 </p>
             </div>
         </motion.footer>

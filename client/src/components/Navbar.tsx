@@ -76,7 +76,7 @@ export default function Navbar() {
             viewport={{ once: true }}
             transition={{ type: "spring", stiffness: 250, damping: 70, mass: 1 }}
         >
-            <div className='max-w-6xl mx-auto flex items-center justify-between bg-black/50 backdrop-blur-md border border-white/4 rounded-2xl p-3'>
+            <div className='max-w-6xl mx-auto flex items-center justify-between rounded-2xl border border-violet-200/[0.14] bg-[#171039]/65 p-3 shadow-[0_14px_45px_rgba(5,3,20,.38),0_0_35px_rgba(139,92,246,.07),inset_0_1px_rgba(255,255,255,.035)] backdrop-blur-[18px]'>
                 <Link to='/' onClick={() => scrollTo(0, 0)} className="flex items-center gap-2">
                     <img src={assets.logo} alt="AdGen Studio logo" className="h-8" />
                     <span className="hidden min-[420px]:inline text-xl font-bold text-white">AdGen Studio</span>
@@ -139,7 +139,7 @@ export default function Navbar() {
                 aria-modal='true'
                 aria-hidden={!isOpen}
                 aria-label='Mobile navigation'
-                className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-black/95 px-6 text-lg font-medium backdrop-blur-md transition-[transform,visibility] duration-300 md:hidden ${isOpen ? 'visible translate-x-0' : 'invisible translate-x-full pointer-events-none'}`}
+                className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 border-l border-violet-200/[0.12] bg-[#080713]/90 px-6 text-lg font-medium shadow-[-20px_0_70px_rgba(139,92,246,.12)] backdrop-blur-xl transition-[transform,visibility] duration-300 md:hidden ${isOpen ? 'visible translate-x-0' : 'invisible translate-x-full pointer-events-none'}`}
             >
                 {navLinks.map((link) => (
                     <a key={link.name} href={link.href} onClick={() => setIsOpen(false)}>
