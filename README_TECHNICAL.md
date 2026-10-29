@@ -247,6 +247,13 @@ npx prisma migrate dev   # Create migration
 - `GET /projects/:projectId` - Get specific project
 - `PATCH /project/:projectId/publish` - Toggle publish
 
+**Payment Routes** (`/api/payment`) — see [PAYMENTS_LIVE_READINESS.md](./PAYMENTS_LIVE_READINESS.md):
+- `POST /create-order` - Create a Razorpay order for a plan (auth)
+- `POST /verify` - Verify a completed checkout and add credits once (auth)
+- `POST /webhook` - Razorpay webhook (signature-verified, raw body)
+
+Payment tests: `cd server && npm test` (unit) · `npm run test:integration` (real database / Razorpay test mode, opt-in) · `npm run check:payments` (env check)
+
 ---
 
 ## 🐛 Debugging
@@ -278,6 +285,7 @@ cd server && npx prisma studio
 | **Backend** | [Part 2](./TECHNICAL_DOCUMENTATION_PART2.md) | Express server, controllers, logging, error handling |
 | **Database & Integrations** | [Part 3](./TECHNICAL_DOCUMENTATION_PART3.md) | Prisma schema, AI services, end-to-end flows, setup |
 | **Status & Contribution** | [Part 4](./TECHNICAL_DOCUMENTATION_PART4.md) | Project status, contribution guide, testing, debugging |
+| **Payments** | [Live readiness](./PAYMENTS_LIVE_READINESS.md) | Razorpay flow, env vars, webhook, reconciliation, activation checklist |
 
 ---
 
