@@ -8,9 +8,13 @@ import * as Sentry from "@sentry/node"
 import userRouter from "./routes/userRoutes.js";
 import projectRouter from "./routes/projectRoutes.js";
 import paymentRouter from "./routes/paymentRoutes.js";
+<<<<<<< HEAD
 import adminRouter from "./routes/adminRoutes.js";
 import modelLibraryRouter from "./routes/modelLibraryRoutes.js";
 import helmet from 'helmet';
+=======
+import { razorpayWebhook } from './controllers/paymentController.js';
+>>>>>>> cb318fcd7d8aacaa4d336c8e61a6419b96d4c8b3
 import logger from './configs/logger.js';
 import { requestLogger, errorLogger } from './middlewares/requestLogger.js';
 import { adminErrorHandler } from './middlewares/adminError.js';
@@ -63,6 +67,10 @@ logger.info('CORS middleware registered');
 // Clerk webhook endpoint (must be before express.json to handle raw body)
 app.post('/api/clerk', express.raw({ type: 'application/json' }), clerkWebhooks)
 logger.info('Clerk webhook endpoint registered at /api/clerk');
+
+// Razorpay webhook endpoint (raw body required for signature verification, so also before express.json)
+app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), razorpayWebhook)
+logger.info('Razorpay webhook endpoint registered at /api/payment/webhook');
 
 // Middleware - JSON parsing and Clerk authentication
 app.use(express.json())

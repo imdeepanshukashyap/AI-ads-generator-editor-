@@ -29,5 +29,10 @@ services:
         sync: false
       - key: RAZORPAY_KEY_SECRET
         sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      # "test" or "live"; payments stay disabled if the keys are from the other mode
+      - key: RAZORPAY_MODE
+        sync: false
       - key: CLIENT_URL
         sync: false

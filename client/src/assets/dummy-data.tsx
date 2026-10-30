@@ -1,4 +1,6 @@
 import { UploadIcon, VideoIcon, ZapIcon } from 'lucide-react';
+import { POLICY_LINKS } from '../configs/business';
+import { CREDIT_PACKS, FREE_SIGNUP_CREDITS, formatInr } from '../configs/pricing';
 
 export const featuresData = [
     {
@@ -18,50 +20,36 @@ export const featuresData = [
     }
 ];
 
+// Display data only, built from configs/pricing.ts. What a purchase actually
+// costs and grants is decided by the server (PURCHASABLE_PLANS).
 export const plansData = [
     {
         id: 'starter',
         name: 'Free',
-        price: '$0',
-        desc: 'Always free',
-        credits: 20,
+        price: formatInr(0),
+        desc: 'Free credits when you sign up',
+        credits: FREE_SIGNUP_CREDITS,
         features: [
-            '20 Free Credits',
-            'Standard quality',
-            'No watermark',
-            'Slower generation speed',
-            'Email support'
-        ]
-    },
-    {
-        id: 'pro',
-        name: 'Pro',
-        price: '$9',
-        desc: 'Only billed monthly',
-        credits: 80,
-        features: [
-            '80 Monthly Credits',
-            'HD quality',
-            'No watermark',
-            'Video generation',
-            'Priority support'
+            `${FREE_SIGNUP_CREDITS} free credits on sign-up`,
+            'Image: 5 credits · 3-image bundle: up to 15 · Video: 10',
+            'No payment details required'
         ],
-        popular: true
+        popular: false
     },
-    {
-        id: 'ultra',
-        name: 'Premium',
-        price: '$29',
-        desc: 'Only billed monthly',
-        credits: 240,
+    ...CREDIT_PACKS.map((pack) => ({
+        id: pack.id,
+        name: pack.name,
+        price: formatInr(pack.pricePaise),
+        desc: 'One-time credit pack',
+        credits: pack.credits,
         features: [
-            'No watermark',
-            '240 Monthly Credits',
-            'FHD quality',
-            'Fast generation speed',
-            'Chat + Email support'
-        ]
-    }
+            `${pack.credits} credits added to your account`,
+            'Use credits on images, 3-image bundles and videos',
+            'One-time payment, no subscription',
+            'Credits added once payment is confirmed'
+        ],
+        popular: pack.id === 'pro'
+    }))
 ];
 
 export const faqData = [
@@ -71,11 +59,11 @@ export const faqData = [
     },
     {
         question: 'Do I own the generated images?',
-        answer: 'Yes — you receive full commercial rights to any images and videos generated on the platform. Use them for ads, ecommerce, social media and more.'
+        answer: 'Subject to our Terms & Conditions and applicable law, you may use the images and videos you generate, including for commercial purposes. You must have the rights and consent needed for every product and person image you upload.'
     },
     {
-        question: 'Can I cancel anytime?',
-        answer: 'Yes — you can cancel from your dashboard. You will retain access through the end of your billing period.'
+        question: 'Is this a subscription? Can I cancel?',
+        answer: 'There is no subscription. Credit packs are one-time purchases, so there is no recurring billing to cancel. See our Refund, Cancellation & Credit Policy for refunds and how credits are used.'
     },
     {
         question: 'What input formats do you support?',
@@ -87,18 +75,15 @@ export const footerLinks = [
     {
         title: "Quick Links",
         links: [
-            { name: "Home", url: "#" },
+            { name: "Home", url: "/" },
             { name: "Features", url: "#" },
-            { name: "Pricing", url: "#" },
+            { name: "Pricing", url: "/plans" },
             { name: "FAQ", url: "#" }
         ]
     },
     {
-        title: "Legal",
-        links: [
-            { name: "Privacy Policy", url: "#" },
-            { name: "Terms of Service", url: "#" }
-        ]
+        title: "Legal & Support",
+        links: Object.values(POLICY_LINKS).map(({ label, path }) => ({ name: label, url: path }))
     },
     {
         title: "Connect",
