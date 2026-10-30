@@ -1,4 +1,4 @@
-import { DollarSignIcon, FolderEditIcon, GalleryHorizontalEnd, MenuIcon, ShieldCheckIcon, SparkleIcon, XIcon } from 'lucide-react';
+import { CalendarIcon, DollarSignIcon, FolderEditIcon, GalleryHorizontalEnd, MenuIcon, Share2Icon, ShieldCheckIcon, SparkleIcon, XIcon } from 'lucide-react';
 import { GhostButton, PrimaryButton } from './Buttons';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
@@ -25,6 +25,8 @@ export default function Navbar() {
         { name: 'Home', href: '/#' },
         { name: 'Create', href: '/generate' },
         { name: 'Community', href: '/community' },
+        { name: 'Social Accounts', href: '/accounts' },
+        { name: 'Post History', href: '/posts' },
         { name: 'Plans', href: '/plans' },
     ];
 
@@ -113,6 +115,10 @@ export default function Navbar() {
                                 <UserButton.Action label='My Generations' labelIcon={<FolderEditIcon size={14} />} onClick={() => navigate('/my-generations')} />
 
                                 <UserButton.Action label='Community' labelIcon={<GalleryHorizontalEnd size={14} />} onClick={() => navigate('/community')} />
+
+                                <UserButton.Action label='Social Accounts' labelIcon={<Share2Icon size={14} />} onClick={() => navigate('/accounts')} />
+
+                                <UserButton.Action label='Post History' labelIcon={<CalendarIcon size={14} />} onClick={() => navigate('/posts')} />
 
                                 <UserButton.Action label='Plans' labelIcon={<DollarSignIcon size={14} />} onClick={() => navigate('/plans')} />
 
