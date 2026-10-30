@@ -64,13 +64,15 @@ const PrivacyPolicy = () => {
                 <p>We create images and videos with Google’s generative AI models, which we access through Google’s Gemini API:</p>
                 <LegalList>
                     <li>
-                        <strong className="text-white">Images.</strong> The product image and model (person) image you upload, together with
-                        your prompt, are sent to Google’s Gemini image model, which returns the generated image to our servers.
+                        <strong className="text-white">Images.</strong> The product image and model (person) image you upload — or a model
+                        image you choose from our model library — are stored with our media storage provider and then sent, together with your
+                        product name, product description and prompt, to Google’s Gemini image model, which returns the generated image to our
+                        servers.
                     </li>
                     <li>
                         <strong className="text-white">Videos.</strong> The generated image you choose, together with your product name, product
-                        description, prompt and narration language, is sent to Google’s Veo video model. Our servers then download the finished
-                        video from Google.
+                        description, prompt, narration language and requested video length, is sent to Google’s Gemini Omni video model, which
+                        returns the finished video to our servers.
                     </li>
                 </LegalList>
                 <p>
@@ -142,9 +144,11 @@ const PrivacyPolicy = () => {
                         request their deletion.
                     </li>
                     <li>
-                        When your account is deleted, your account record, projects and purchase records are deleted from our application
-                        database. Media files may remain in media storage until removed on request. Razorpay keeps its own payment records
-                        under its policies.
+                        When your account is deleted, your projects are deleted from our application database and your account record is
+                        anonymized: your name, email address and profile image are removed. Payment records, credit history and audit records
+                        are kept, linked to the anonymized record, so that we can meet accounting and payment record-keeping obligations and
+                        handle payment disputes. Media files may remain in media storage until removed on request. Razorpay keeps its own
+                        payment records under its policies.
                     </li>
                     <li>
                         Server logs are kept for troubleshooting and security. Log files on our servers are rotated by size, so older entries

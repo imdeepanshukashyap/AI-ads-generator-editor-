@@ -133,9 +133,10 @@ npm test                      # unit tests, no network or database
 npm run typecheck
 npm run build
 
-# Real PostgreSQL. Use a DISPOSABLE or STAGING database, never production.
+# Real PostgreSQL. Use a NEW, EMPTY, DISPOSABLE test database only: never production, and never a
+# staging copy of production (those follow section 5). db push is safe here only because the database is empty.
 # Set BOTH variables in the shell; prisma.config.ts otherwise falls back to DIRECT_URL from .env.
-DIRECT_URL=<test db url> DATABASE_URL=<test db url> npx prisma db push
+DIRECT_URL=<disposable test db url> DATABASE_URL=<disposable test db url> npx prisma db push
 PAYMENT_TEST_DATABASE_URL=<test db url> npm run test:integration
 ```
 The database suites refuse to run if `PAYMENT_TEST_DATABASE_URL` equals `DATABASE_URL` or `DIRECT_URL`. They
@@ -168,22 +169,41 @@ Client: `cd client && npm ci && npm run build`.
 
 ---
 
-## 5. Database change (additive; apply before deploying the new server)
+## 5. Production database changes (backup + reviewed additive SQL only)
 
-`Transaction` gains `currency String @default("INR")` and two indexes. `refunded` is a new status *value*
-in the existing text column, so it needs no schema change. Existing rows get `INR` automatically.
+**Rules**
+- **Never run `prisma db push` against production.** It makes the database match this repository's schema
+  file exactly, so anything in production that the file lacks (for example tables or columns added from
+  another branch) is **dropped together with its data**.
+- **Never run `prisma migrate deploy` or `prisma migrate dev` against production** while
+  `prisma/migrations` does not represent the production schema. It currently holds only `init` (User,
+  Project) and `model_library`; `Transaction`, `AdminLog`, `SystemSetting`, `CreditTransaction` and the
+  `User.role`/`status` columns were created another way.
+- Keep test and staging databases **separate** from production (separate Neon branches or databases).
+  Never point `DATABASE_URL`/`DIRECT_URL` at production while running tests or schema tools.
 
-Old code ignores the new column, but **new code requires it**, so apply the schema first.
+**Change required by the Razorpay code** (additive; apply before deploying the new server):
+```sql
+ALTER TABLE "Transaction" ADD COLUMN "currency" TEXT NOT NULL DEFAULT 'INR';
+CREATE INDEX "Transaction_userId_status_createdAt_idx" ON "Transaction"("userId", "status", "createdAt");
+CREATE INDEX "Transaction_status_createdAt_idx" ON "Transaction"("status", "createdAt");
+```
+Existing rows get `INR`; the current server keeps working because it ignores the new column. `refunded` is a
+new status *value* in the existing text column and needs no schema change. New code requires the column,
+so apply this first.
 
-Verified locally: pushing this schema onto a database created from the committed schema completed with no
-data-loss prompt, and kept existing rows (`currency` filled with `INR`).
-
-This project manages its schema with `prisma db push`. `prisma/migrations` is out of date, so
-**do not run `prisma migrate deploy`.**
-
-1. **Staging:** `cd server && DIRECT_URL=<staging url> DATABASE_URL=<staging url> npx prisma db push`.
-   Expect only an added column and indexes. **If Prisma mentions data loss, stop.**
-2. **Production:** after the staging smoke test passes, an authorised person runs the same command against production.
+**Procedure** (an authorised person; stop at any surprise):
+1. **Back up:** in Neon, create a branch (or restore point) from the production branch and note the time.
+2. **Confirm the target:** the production `DATABASE_URL` host/endpoint and database name match that branch
+   (compare them on screen; never share the URL).
+3. **Generate the SQL read-only:** `cd server && npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`
+   with `DIRECT_URL` set to production for this command only. It only reads the schema. **If the output
+   contains anything other than the additive statements above (DROP, ALTER COLUMN, RENAME, data changes), stop.**
+4. **Rehearse** the reviewed SQL on the backup or a staging branch first.
+5. **Apply** only the reviewed statements to production, in the Neon SQL editor or with
+   `npx prisma db execute --file reviewed.sql` scoped to production for that one command. To avoid briefly
+   blocking writes, the indexes can be created with `CREATE INDEX CONCURRENTLY` (run outside a transaction).
+6. **Verify:** re-run step 3; the statements above should no longer appear.
 
 ---
 
@@ -209,7 +229,7 @@ authorised but never captured are auto-refunded by Razorpay and never credited.
 
 ## 7. Staging procedure (test mode)
 
-1. Create a staging database, for example a branch of the production database, and apply the schema (section 5).
+1. Create a staging database, for example a branch of the production database, and apply the reviewed SQL to it (section 5; never `prisma db push`).
 2. Run the database suite against it (section 4) and the Razorpay test-mode suite with test keys.
 3. Deploy the server to a staging Render service with **test** keys, `RAZORPAY_WEBHOOK_SECRET` and the
    staging `DATABASE_URL`. Run `node dist/scripts/check-payment-env.js --api`; it must print `OK`.
@@ -242,12 +262,13 @@ authorised but never captured are auto-refunded by Razorpay and never credited.
 
 1. Review and merge.
 2. **Production database:**
-   - First take a backup or restore point with your Postgres provider (the code comments indicate Neon, which offers branches and restore points).
-   - Then run `prisma db push` (section 5). This must happen **before** the new server is deployed.
+   - Follow section 5: back up, generate the SQL read-only, review it, then apply only the reviewed additive statements.
+   - **Never `prisma db push` or `prisma migrate deploy` against production.**
+   - This must happen **before** the new server is deployed.
 3. **Render:**
    - Set `RAZORPAY_WEBHOOK_SECRET` (declared in `render.yaml`).
    - Keep the keys in **test** mode until activation.
-   - Deploy. `render.yaml`'s build now runs `npm install --include=dev`, because `NODE_ENV=production` would otherwise skip `typescript` and `prisma`. If the service was created manually rather than from the Blueprint, make the same change to the build command in the Render settings.
+   - Deploy. The build needs `typescript` and `prisma` (devDependencies). With `NODE_ENV=production` set at build time, `npm install` skips them unless the build command uses `npm install --include=dev`; check the build command in the Render settings (the committed `render.yaml` does not include that flag).
    - Health check: `GET /` returns `Server is Live!`. `node dist/scripts/check-payment-env.js --api` prints `OK`.
 4. **Vercel:** deploy the client. Optionally delete `VITE_RAZORPAY_KEY_ID`.
 5. Create the production test-mode webhook and repeat test cases 1–6.

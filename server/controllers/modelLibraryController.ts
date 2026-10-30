@@ -5,15 +5,25 @@ import { v2 as cloudinary } from 'cloudinary';
 import { prisma } from '../configs/prisma.js';
 import { writeAdminLog } from '../services/adminService.js';
 
-const metadataSchema = z.object({
+const metadataFields = {
   name: z.string().trim().min(2).max(80),
-  description: z.string().trim().max(500).default(''),
-  category: z.string().trim().min(1).max(40).default('General'),
-  tags: z.union([z.array(z.string().trim().min(1).max(30)).max(12), z.string().transform((value) => value.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 12))]).default([]),
-  isPublished: z.union([z.boolean(), z.enum(['true', 'false']).transform((value) => value === 'true')]).default(false),
+  description: z.string().trim().max(500),
+  category: z.string().trim().min(1).max(40),
+  // The admin form sends tags as one comma-separated string; both forms get the same per-tag limit.
+  tags: z.union([z.array(z.string().trim().min(1).max(30)).max(12), z.string().transform((value) => value.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 12)).pipe(z.array(z.string().max(30)))]),
+  isPublished: z.union([z.boolean(), z.enum(['true', 'false']).transform((value) => value === 'true')]),
+};
+
+const metadataSchema = z.object({
+  ...metadataFields,
+  description: metadataFields.description.default(''),
+  category: metadataFields.category.default('General'),
+  tags: metadataFields.tags.default([]),
+  isPublished: metadataFields.isPublished.default(false),
 }).strict();
 
-const updateMetadataSchema = metadataSchema.partial();
+// No defaults: a partial update, such as the publish toggle, must not reset the fields it leaves out.
+const updateMetadataSchema = z.object(metadataFields).partial().strict();
 const listSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().min(1).max(100).default(24),

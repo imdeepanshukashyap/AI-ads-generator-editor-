@@ -20,8 +20,8 @@ import { FakeRazorpayGateway, signCheckout, webhookDelivery } from '../helpers/f
  * concurrent conditional updates, interactive-transaction rollback, the unique
  * order constraint and the column defaults. Razorpay is faked.
  *
- * Needs a disposable or staging database that already has the schema:
- *   DIRECT_URL=<test url> DATABASE_URL=<test url> npx prisma db push
+ * Needs a new, empty, disposable test database (never production or a copy of it) with the schema:
+ *   DIRECT_URL=<disposable test db url> DATABASE_URL=<disposable test db url> npx prisma db push
  *   PAYMENT_TEST_DATABASE_URL=<test url> npm run test:integration
  *
  * Only touches rows it creates (ids prefixed itest_) and deletes them afterwards.
@@ -186,7 +186,7 @@ describe('payments on real PostgreSQL', { skip: databaseUrl ? false : 'PAYMENT_T
                 ),
             ]);
 
-            if ((await txnStatus(p.orderId)) === 'success') {
+            if ((await txnStatus(p.orderId)) === 'refunded_after_credit') {
                 assert.equal(capture.status, 'credited');
                 assert.equal(refund.status, 'needs_review');
                 assert.equal(await credits(userId), 20 + PRO_CREDITS);

@@ -70,7 +70,7 @@ model Transaction {
   razorpayOrderId   String   @unique
   razorpayPaymentId String?
   razorpaySignature String?
-  status            String   @default("pending") // pending, success (credited), failed, refunded (closed before crediting)
+  status            String   @default("pending") // pending, success (credited), failed, refunded (closed before crediting), refunded_after_credit (credited, then refunded; for review)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

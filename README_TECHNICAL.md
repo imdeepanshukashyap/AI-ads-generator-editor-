@@ -70,7 +70,9 @@ cd ../server && npm install
 # Setup .env files (see Part 3, Section 8)
 # Get API keys: Clerk, Google AI, Cloudinary, PostgreSQL
 
-# Setup database
+# Setup database (a NEW, EMPTY local/development database only)
+# Never run `prisma db push` or `prisma migrate deploy` against production:
+# production changes use a backup and reviewed SQL (PAYMENTS_LIVE_READINESS.md, section 5).
 cd server
 npx prisma generate
 npx prisma db push
@@ -227,8 +229,9 @@ npm run build    # Compile TypeScript
 cd server
 npx prisma studio        # Open database GUI
 npx prisma generate      # Generate Prisma client
-npx prisma db push       # Push schema changes
-npx prisma migrate dev   # Create migration
+npx prisma db push       # Push schema changes: disposable/local databases ONLY, never production
+npx prisma migrate dev   # Create migration: local only; prisma/migrations does not match production yet
+# Production: backup + reviewed additive SQL only (see PAYMENTS_LIVE_READINESS.md, section 5)
 ```
 
 ---

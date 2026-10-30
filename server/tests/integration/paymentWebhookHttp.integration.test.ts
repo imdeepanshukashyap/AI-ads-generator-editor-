@@ -161,7 +161,7 @@ describe('POST /api/payment/webhook on real PostgreSQL', { skip: databaseUrl ? f
         assert.equal(await deliver('payment.captured', payment), 200);
 
         assert.equal(await deliver('refund.processed', gateway.refundPayment(payment.id)), 200);
-        assert.deepEqual(await state(userId, orderId), { credits: 100, status: 'success' });
+        assert.deepEqual(await state(userId, orderId), { credits: 100, status: 'refunded_after_credit' });
     });
 
     it('acknowledges events for orders this app did not create, without writing anything', async () => {

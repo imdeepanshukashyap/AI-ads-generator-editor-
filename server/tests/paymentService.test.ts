@@ -440,7 +440,35 @@ describe('refunds', () => {
 
         const result = await deliver('refund.processed', refunded);
         assert.equal(result.status, 'needs_review');
-        assert.equal(db.txnByOrder(p.orderId)!.status, 'success');
+        assert.equal(db.txnByOrder(p.orderId)!.status, 'refunded_after_credit', 'stored, so admins can find it');
+        assert.equal(db.credits('user_a'), STARTING_CREDITS + PRO_CREDITS);
+    });
+
+    it('flags a credited order once, and never credits it again after the flag', async () => {
+        const p = await payOrder();
+        assert.equal((await verify('user_a', p)).status, 'credited');
+        const refunded = gateway.refundPayment(p.paymentId, 100); // partial refund
+
+        assert.equal((await deliver('refund.created', refunded)).status, 'needs_review');
+        assert.equal((await deliver('refund.processed', refunded)).status, 'ignored', 'the second refund event is not a second alert');
+        assert.equal((await deliver('payment.captured', p.payment)).status, 'already_processed');
+        assert.equal((await deliver('order.paid', p.payment)).status, 'already_processed');
+        assert.equal((await verify('user_a', p)).status, 'already_processed');
+        const later = () => new Date(Date.now() + 60 * 60 * 1000);
+        assert.equal((await reconcilePendingTransactions({ ...deps, now: later }, { apply: true })).checked, 0);
+
+        assert.equal(db.txnByOrder(p.orderId)!.status, 'refunded_after_credit');
+        assert.equal(db.credits('user_a'), STARTING_CREDITS + PRO_CREDITS);
+    });
+
+    it('flags a failed refund on a credited order that was flagged as refunded', async () => {
+        const p = await payOrder();
+        await verify('user_a', p);
+        const refunded = gateway.refundPayment(p.paymentId);
+        await deliver('refund.created', refunded);
+
+        assert.equal((await deliver('refund.failed', refunded)).status, 'needs_review');
+        assert.equal(db.txnByOrder(p.orderId)!.status, 'refunded_after_credit');
         assert.equal(db.credits('user_a'), STARTING_CREDITS + PRO_CREDITS);
     });
 
@@ -483,7 +511,7 @@ describe('refunds', () => {
             ]);
 
             const status = db.txnByOrder(p.orderId)!.status;
-            if (status === 'success') {
+            if (status === 'refunded_after_credit') {
                 assert.equal(capture.status, 'credited');
                 assert.equal(refund.status, 'needs_review', 'a refund after credit is always flagged');
                 assert.equal(db.credits('user_a'), STARTING_CREDITS + PRO_CREDITS);

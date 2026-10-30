@@ -35,7 +35,11 @@ export const TRANSACTION_STATUS = {
     SUCCESS: 'success',   // credits granted
     FAILED: 'failed',     // last attempt failed; a later capture on the same order can still be credited
     REFUNDED: 'refunded', // payment refunded before credits were granted; never credited
+    REFUNDED_AFTER_CREDIT: 'refunded_after_credit', // credits granted, then the payment was refunded (fully or partly); for review
 } as const;
+
+/** Orders whose credits were granted; nothing may credit them again. */
+export const CREDITED_STATUSES: string[] = [TRANSACTION_STATUS.SUCCESS, TRANSACTION_STATUS.REFUNDED_AFTER_CREDIT];
 
 // Abuse guard: maximum unpaid checkout orders a user may open per window.
 export const MAX_RECENT_PENDING_ORDERS = 10;
@@ -233,6 +237,19 @@ const markPaymentRefunded = async (db: PaymentDb, txn: TransactionRecord, paymen
     return count > 0;
 };
 
+/**
+ * Marks a credited order whose payment was then refunded, so it stands out for review.
+ * Credits are not taken back automatically. False when it was not a plain credited
+ * order, including when it was already flagged by an earlier refund event.
+ */
+const flagRefundAfterCredit = async (db: PaymentDb, txn: TransactionRecord) => {
+    const { count } = await db.transaction.updateMany({
+        where: { id: txn.id, status: TRANSACTION_STATUS.SUCCESS },
+        data: { status: TRANSACTION_STATUS.REFUNDED_AFTER_CREDIT },
+    });
+    return count > 0;
+};
+
 // ─── Create order ────────────────────────────────────────────────────────────
 export type CreateOrderResult =
     | { ok: true; orderId: string; amount: number; currency: string; transactionId: string }
@@ -333,7 +350,7 @@ export const verifyCheckoutPayment = async (
     }
 
     // Shortcuts only; the conditional update in grantCreditsForPayment is the real guard.
-    if (txn.status === TRANSACTION_STATUS.SUCCESS) {
+    if (CREDITED_STATUSES.includes(txn.status)) {
         return { status: 'already_processed', credits: txn.credits };
     }
     if (txn.status === TRANSACTION_STATUS.REFUNDED) return { status: 'refunded' };
@@ -400,14 +417,17 @@ const applyRefund = async (
 
     if (await markPaymentRefunded(deps.db, txn, payment.id)) return { status: 'marked_refunded', orderId, event };
 
-    const current = await deps.db.transaction.findUnique({ where: { id: txn.id } });
-    if (current?.status === TRANSACTION_STATUS.SUCCESS) {
+    if (await flagRefundAfterCredit(deps.db, txn)) {
         return {
             status: 'needs_review',
-            reason: 'refund on an order whose credits were already granted; credits were not removed automatically',
+            reason: 'refund on an order whose credits were already granted; marked refunded_after_credit, credits were not removed automatically',
             orderId,
             event,
         };
+    }
+    const current = await deps.db.transaction.findUnique({ where: { id: txn.id } });
+    if (current?.status === TRANSACTION_STATUS.REFUNDED_AFTER_CREDIT) {
+        return { status: 'ignored', reason: 'refund on a credited order that is already flagged for review', event };
     }
     return { status: 'ignored', reason: 'order already closed as refunded', event };
 };
@@ -465,13 +485,17 @@ export const handleRazorpayWebhook = async (
     if (REFUND_EVENTS.has(event)) return applyRefund(deps, txn, payment, event);
 
     if (event === REFUND_FAILED_EVENT) {
-        return txn.status === TRANSACTION_STATUS.REFUNDED
-            ? { status: 'needs_review', reason: 'refund failed on an order closed as refunded; the customer paid and has no credits', orderId, event }
-            : { status: 'ignored', reason: 'refund failed; order state unchanged', event };
+        if (txn.status === TRANSACTION_STATUS.REFUNDED) {
+            return { status: 'needs_review', reason: 'refund failed on an order closed as refunded; the customer paid and has no credits', orderId, event };
+        }
+        if (txn.status === TRANSACTION_STATUS.REFUNDED_AFTER_CREDIT) {
+            return { status: 'needs_review', reason: 'refund failed on a credited order flagged as refunded; check the refund in the Razorpay Dashboard', orderId, event };
+        }
+        return { status: 'ignored', reason: 'refund failed; order state unchanged', event };
     }
 
     // Credit events. Duplicates of a finished order need no API call.
-    if (txn.status === TRANSACTION_STATUS.SUCCESS) {
+    if (CREDITED_STATUSES.includes(txn.status)) {
         return { status: 'already_processed', orderId, credits: txn.credits, event };
     }
     if (txn.status === TRANSACTION_STATUS.REFUNDED) {
@@ -516,7 +540,7 @@ export const reconcileTransaction = async (
     txn: TransactionRecord,
     options: { apply: boolean },
 ): Promise<{ outcome: ReconcileOutcome; paymentId?: string }> => {
-    if (txn.status === TRANSACTION_STATUS.SUCCESS) return { outcome: 'already_processed' };
+    if (CREDITED_STATUSES.includes(txn.status)) return { outcome: 'already_processed' };
     if (txn.status === TRANSACTION_STATUS.REFUNDED) return { outcome: 'refunded' };
 
     const payments = await callGateway('order payments fetch', () =>

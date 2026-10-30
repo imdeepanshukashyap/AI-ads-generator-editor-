@@ -1,4 +1,6 @@
 import { prisma } from '../configs/prisma.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
+import { CREDITED_STATUSES, TRANSACTION_STATUS } from './paymentService.js';
 
 export const pageParams = (page: number, limit: number) => ({
     skip: (page - 1) * limit,
@@ -108,17 +110,89 @@ export const getAnalytics = async (days: number) => {
     return { users: { labels, data: userData }, generations: { labels, data: generationData }, credits: { labels, data: creditData }, successfulGenerations: successful, failedGenerations: projects.length - successful, successRate: projects.length ? successful / projects.length : 0, imageGenerations: projects.filter((p) => generationType(p) === 'image').length, videoGenerations: projects.filter((p) => generationType(p) === 'video').length, carouselGenerations: projects.filter((p) => generationType(p) === 'carousel').length };
 };
 
+/** Formats an amount held in the currency's smallest unit (paise for INR, as Razorpay stores it). */
+export const formatMoney = (minorUnits: number, currency: string) => {
+    try {
+        const format = new Intl.NumberFormat('en-IN', { style: 'currency', currency });
+        return format.format(minorUnits / 10 ** (format.resolvedOptions().maximumFractionDigits ?? 2));
+    } catch {
+        return `${(minorUnits / 100).toFixed(2)} ${currency}`;
+    }
+};
+
+type PurchaseRecord = {
+    id: string; userId: string; planName: string; amount: number; currency: string; credits: number; status: string; createdAt: Date;
+    user: { id: string; name: string; email: string } | null;
+};
+
+/**
+ * A Razorpay purchase as a credit-history row. Only a captured, credited payment is a
+ * credit addition; pending, failed and refunded orders never added credits, so they are
+ * labelled with their payment status and no money received. A payment refunded after its
+ * credits were granted stays an addition (the credits were added) but is flagged for review;
+ * the refunded amount, full or partial, is in the Razorpay Dashboard.
+ */
+export const toPurchaseHistoryRow = (transaction: PurchaseRecord) => {
+    const credited = CREDITED_STATUSES.includes(transaction.status);
+    const needsReview = transaction.status === TRANSACTION_STATUS.REFUNDED_AFTER_CREDIT;
+    const money = formatMoney(transaction.amount, transaction.currency);
+    return {
+        id: transaction.id,
+        userId: transaction.userId,
+        type: credited ? 'ADD' : `PAYMENT_${transaction.status.toUpperCase()}`,
+        amount: !credited
+            ? `${money} · no credits added`
+            : `${transaction.credits} credits · ${money}${needsReview ? ' · payment refunded after credits were added — review' : ''}`,
+        moneyPaid: !credited ? 0 : needsReview ? null : transaction.amount,
+        currency: transaction.currency,
+        planName: transaction.planName,
+        status: transaction.status,
+        needsReview,
+        balance: null,
+        reason: transaction.status === TRANSACTION_STATUS.SUCCESS ? `${transaction.planName} purchase` : `${transaction.planName} purchase (${transaction.status})`,
+        admin: null,
+        user: transaction.user,
+        createdAt: transaction.createdAt,
+    };
+};
+
 export const getCreditTransactions = async (page: number, limit: number, userId?: string, type?: string) => {
-    const where = { ...(userId ? { userId } : {}), ...(type && !['ADD', 'REFUND'].includes(type) ? { type } : {}) };
-    const [total, data] = await Promise.all([
-        prisma.creditTransaction.count({ where }),
-        prisma.creditTransaction.findMany({ where, orderBy: { createdAt: 'desc' }, include: { user: { select: { id: true, name: true, email: true } }, admin: { select: { id: true, name: true, email: true } } } }),
-    ]);
-        const purchases = type && !['ADD', 'REFUND'].includes(type) ? [] : await prisma.transaction.findMany({ where: userId ? { userId } : undefined, orderBy: { createdAt: 'desc' }, include: { user: { select: { id: true, name: true, email: true } } } });
-    const purchaseRows = purchases.map((transaction) => ({ id: transaction.id, userId: transaction.userId, type: 'ADD', amount: `${transaction.credits} credits · ₹${(transaction.amount / 100).toFixed(2)}`, moneyPaid: transaction.amount, currency: 'INR', planName: transaction.planName, status: transaction.status, balance: null, reason: `${transaction.planName} purchase`, admin: null, user: transaction.user, createdAt: transaction.createdAt }));
-    const merged = [...data, ...purchaseRows].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const where = { ...(userId ? { userId } : {}), ...(type ? { type } : {}) };
+    const data = await prisma.creditTransaction.findMany({ where, orderBy: { createdAt: 'desc' }, include: { user: { select: { id: true, name: true, email: true } }, admin: { select: { id: true, name: true, email: true } } } });
+    // Purchases are listed unfiltered (every status), or as credit additions (credited only) when filtering by ADD.
+    const purchases = type && type !== 'ADD' ? [] : await prisma.transaction.findMany({ where: { ...(userId ? { userId } : {}), ...(type === 'ADD' ? { status: { in: CREDITED_STATUSES } } : {}) }, orderBy: { createdAt: 'desc' }, include: { user: { select: { id: true, name: true, email: true } } } });
+    const merged = [...data, ...purchases.map(toPurchaseHistoryRow)].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     return { total: merged.length, data: merged.slice((page - 1) * limit, page * limit) };
 };
+
+export type CreditAdjustmentDb = Pick<PrismaClient, '$transaction'>;
+
+export type CreditAdjustment = {
+    userId: string; adminId: string; amount: number; operation: 'ADD' | 'REMOVE'; reason: string; ipAddress?: string; userAgent?: string;
+};
+
+/**
+ * Applies an admin credit change, its credit-history row and its audit log in one transaction.
+ * The balance check is part of the UPDATE itself (credits >= amount for a removal): Postgres
+ * locks the row and re-checks the condition against the latest committed balance, so
+ * concurrent admin changes and payment credits can never take a balance below zero.
+ */
+export const adjustUserCredits = (db: CreditAdjustmentDb, input: CreditAdjustment) => db.$transaction(async (tx) => {
+    const removing = input.operation === 'REMOVE';
+    const { count } = await tx.user.updateMany({
+        where: { id: input.userId, ...(removing ? { credits: { gte: input.amount } } : {}) },
+        data: { credits: removing ? { decrement: input.amount } : { increment: input.amount } },
+    });
+    if (count === 0) {
+        const exists = await tx.user.findUnique({ where: { id: input.userId }, select: { id: true } });
+        return { status: exists ? 'insufficient_credits' : 'not_found' } as const;
+    }
+    // The row stays locked by this transaction until commit, so this is the balance the change produced.
+    const user = await tx.user.findUniqueOrThrow({ where: { id: input.userId }, select: { id: true, credits: true } });
+    await tx.creditTransaction.create({ data: { userId: input.userId, adminId: input.adminId, type: input.operation, amount: input.amount, balance: user.credits, reason: input.reason } });
+    await tx.adminLog.create({ data: { adminId: input.adminId, action: removing ? 'CREDITS_REMOVED' : 'CREDITS_ADDED', targetType: 'USER', targetId: input.userId, description: input.reason, metadata: { amount: input.amount, operation: input.operation }, ipAddress: input.ipAddress, userAgent: input.userAgent } });
+    return { status: 'updated', user } as const;
+});
 
 export const getAiMonitoring = async () => {
     const [projects, today, month] = await Promise.all([
@@ -128,5 +202,6 @@ export const getAiMonitoring = async () => {
     ]);
     const successful = projects.filter((project) => !project.isGenerating && !project.error && (project.generatedImage || project.generatedVideo)).length;
     const failed = projects.filter((project) => !!project.error).length;
-    return { service: process.env.GOOGLE_CLOUD_API_KEY ? 'Healthy' : 'Down', provider: 'Google Gemini / Veo', totalRequests: projects.length, successfulRequests: successful, failedRequests: failed, errorRate: projects.length ? failed / projects.length : 0, creditsConsumed: projects.reduce((sum, project) => sum + generationCredits(project), 0), requestsToday: today, requestsThisMonth: month, averageResponseTimeMs: null, averageResponseTimeAvailable: false };
+    // Same key lookup as googleAiService; video uses Gemini Omni, not Veo.
+    return { service: process.env.GOOGLE_CLOUD_API_KEY1 || process.env.GOOGLE_CLOUD_API_KEY ? 'Healthy' : 'Down', provider: 'Google Gemini',totalRequests: projects.length, successfulRequests: successful, failedRequests: failed, errorRate: projects.length ? failed / projects.length : 0, creditsConsumed: projects.reduce((sum, project) => sum + generationCredits(project), 0), requestsToday: today, requestsThisMonth: month, averageResponseTimeMs: null, averageResponseTimeAvailable: false };
 };
