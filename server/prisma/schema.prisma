@@ -77,10 +77,11 @@ model Transaction {
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-<<<<<<< HEAD
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([userId, status, createdAt])
+  @@index([status, createdAt])
 }
 
 model AdminLog {
@@ -145,8 +146,4 @@ model CreditTransaction {
   @@index([adminId])
   @@index([type])
   @@index([createdAt])
-=======
-  @@index([userId, status, createdAt])
-  @@index([status, createdAt])
->>>>>>> cb318fcd7d8aacaa4d336c8e61a6419b96d4c8b3
 }

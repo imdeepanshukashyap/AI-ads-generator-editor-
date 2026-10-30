@@ -58,11 +58,7 @@ export default function Footer() {
                 </div>
 
                 <p className="py-4 text-center text-sm text-gray-400">
-<<<<<<< HEAD
-                    © {new Date().getFullYear()} {' '} AdGen Studio . All rights reserved.
-=======
                     © {new Date().getFullYear()} {BUSINESS.legalName ?? BRAND_NAME}. All rights reserved.
->>>>>>> cb318fcd7d8aacaa4d336c8e61a6419b96d4c8b3
                 </p>
             </div>
         </motion.footer>

@@ -10,19 +10,16 @@ import MyGenerations from './pages/MyGenerations';
 import Community from './pages/Community';
 import Plans from './pages/Plans';
 import Loading from './pages/Loading';
-<<<<<<< HEAD
 import UserSignIn from './pages/UserSignIn';
 import Admin from './pages/Admin';
 import AdminProfile from './pages/AdminProfile';
 import AdminRouteGuard from './components/AdminRouteGuard';
-=======
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsAndConditions from './pages/TermsAndConditions';
 import RefundPolicy from './pages/RefundPolicy';
 import Contact from './pages/Contact';
 import About from './pages/About';
 import ShippingPolicy from './pages/ShippingPolicy';
->>>>>>> cb318fcd7d8aacaa4d336c8e61a6419b96d4c8b3
 import {Toaster} from 'react-hot-toast'
 
 function App() {
@@ -41,21 +38,18 @@ function App() {
 				<Route path='/community' element={<Community />}/>
 				<Route path='/plans' element={<Plans />}/>
 				<Route path='/loading' element={<Loading />}/>
-<<<<<<< HEAD
 				<Route path='/sign-in/*' element={<UserSignIn />}/>
 				<Route element={<AdminRouteGuard />}>
 					<Route path='/admin/analytics' element={<Navigate to='/admin' replace />}/>
 					<Route path='/admin/*' element={<Admin />}/>
 					<Route path='/admin/profile' element={<AdminProfile />}/>
 				</Route>
-=======
 				<Route path='/privacy-policy' element={<PrivacyPolicy />}/>
 				<Route path='/terms-and-conditions' element={<TermsAndConditions />}/>
 				<Route path='/refund-policy' element={<RefundPolicy />}/>
 				<Route path='/contact' element={<Contact />}/>
 				<Route path='/about' element={<About />}/>
 				<Route path='/shipping-policy' element={<ShippingPolicy />}/>
->>>>>>> cb318fcd7d8aacaa4d336c8e61a6419b96d4c8b3
 				
 			</Routes>
 

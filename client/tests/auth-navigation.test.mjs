@@ -58,7 +58,7 @@ test('community separates media by reliable project fields', async () => {
     assert.match(community, /role='tablist'/);
     assert.match(community, /Image Generations/);
     assert.match(community, /Video Generations/);
-    assert.match(community, /!project\.generatedVideo && Boolean\(project\.generatedImage \|\| project\.generatedImages\?\.length\)/);
+    assert.match(community, /!project\.generatedVideo && \(project\.generatedImages\?\.length \?\? 0\) <= 1 && Boolean\(project\.generatedImage \|\| project\.generatedImages\?\.length\)/);
     assert.match(community, /Boolean\(project\.generatedVideo\)/);
     assert.match(community, /aria-modal='true'/);
     assert.match(community, /dialogVideo\.current\?\.pause\(\)/);
