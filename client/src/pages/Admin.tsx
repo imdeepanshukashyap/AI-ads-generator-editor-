@@ -220,7 +220,7 @@ const DataPage = ({ endpoint, title }: { endpoint: string; title: string }) => {
     const items = getRows(value);
     return <div className={cardClass}>
         <h2 className='font-semibold mb-5'>{title}</h2>
-        {items.length === 0 ? <Empty text='No records found' /> : <div className='max-h-[32rem] overflow-auto'>
+        {items.length === 0 ? <Empty text='No records found' /> : <div className='max-h-128 overflow-auto'>
             <table className='w-full min-w-[720px] text-left text-sm'>
                 <thead className='text-gray-500 border-b border-white/10'><tr><th className='p-3'>User / Admin</th><th className='p-3'>Type</th><th className='p-3'>Credits / Amount</th><th className='p-3'>Date</th></tr></thead>
                 <tbody>{items.map((item, index) => <tr key={getText(item.id, item.key, index)} className='border-b border-white/5'>

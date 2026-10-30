@@ -93,13 +93,13 @@ export default function ModelLibraryBrowser({ open, selectedId, onClose, onSelec
         </div>
 
         <div className="min-h-72 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
-          {loading ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }, (_, index) => <div key={index} className="aspect-[4/5] animate-pulse rounded-2xl border border-white/5 bg-white/[0.04]" />)}</div>
+          {loading ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }, (_, index) => <div key={index} className="aspect-4/5 animate-pulse rounded-2xl border border-white/5 bg-white/[0.04]" />)}</div>
             : error ? <div className="flex min-h-72 items-center justify-center text-center"><div><p className="text-rose-300">{error}</p><button type="button" onClick={() => setRetryKey((value) => value + 1)} className="mt-4 rounded-lg border border-violet-300/20 px-4 py-2 text-sm">Retry</button></div></div>
               : models.length === 0 ? <div className="min-h-72 text-center"><p className="text-slate-300">No published models match this search.</p></div>
                 : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{models.map((model) => {
                   const isSelected = selected?.id === model.id;
                   return <button type="button" key={model.id} onClick={() => setSelected(model)} aria-pressed={isSelected} className={`group overflow-hidden rounded-2xl border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${isSelected ? 'border-violet-300/70 bg-violet-500/15 shadow-[0_12px_35px_rgba(139,92,246,.16)]' : 'border-violet-200/[0.12] bg-white/[0.035] hover:border-violet-300/35'}`}>
-                    <span className="relative block aspect-[4/5] overflow-hidden bg-black/20">
+                    <span className="relative block aspect-4/5 overflow-hidden bg-black/20">
                       <img src={model.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
                       {isSelected && <span className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-violet-500 text-white"><CheckIcon className="size-4" /></span>}
                     </span>

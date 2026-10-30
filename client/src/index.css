@@ -72,6 +72,18 @@
 }
 
 @layer utilities {
+    .model-library-picker-bg {
+        background:
+            radial-gradient(circle at top, rgba(139, 92, 246, 0.14), transparent 55%),
+            rgba(255, 255, 255, 0.035);
+    }
+
+    .model-library-card-bg {
+        background:
+            radial-gradient(circle at top, rgba(139, 92, 246, 0.12), transparent 60%),
+            rgba(8, 7, 19, 0.72);
+    }
+
     .glass-panel {
         @apply bg-white/5 backdrop-blur-lg border border-white/10 shadow-xl;
     }
