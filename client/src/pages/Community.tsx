@@ -53,11 +53,12 @@ const Community = () => {
     document.addEventListener('keydown', closeOnEscape);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    dialogVideo.current?.play().catch(() => undefined);
+    const video = dialogVideo.current;
+    video?.play().catch(() => undefined);
     return () => {
       document.removeEventListener('keydown', closeOnEscape);
       document.body.style.overflow = previousOverflow;
-      dialogVideo.current?.pause();
+      video?.pause();
     };
   }, [selectedVideo]);
 

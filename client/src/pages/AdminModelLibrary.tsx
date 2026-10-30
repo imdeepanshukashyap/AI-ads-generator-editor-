@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ImagePlusIcon, Loader2Icon, PencilIcon, SearchIcon, Trash2Icon } from 'lucide-react';
 import { useAuth } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
 import api from '../configs/axios';
+import { getApiErrorMessage } from '../utils/apiError';
 
 type Model = { id: string; name: string; description: string; category: string; tags: string[]; imageUrl: string; isPublished: boolean; createdAt: string };
 type Page = { data: Model[]; categories: string[]; pagination: { page: number; totalPages: number; total: number } };
@@ -26,7 +27,6 @@ export default function AdminModelLibrary() {
 
   const headers = async () => ({ Authorization: `Bearer ${await getToken()}` });
   const load = async (retry = false) => {
-    setLoading(true);
     try {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
@@ -35,12 +35,13 @@ export default function AdminModelLibrary() {
       const response = await api.get(`/api/admin/model-library?${params}`, { headers: await headers() });
       setPage(response.data);
       if (retry) toast.success('Library refreshed');
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Unable to load model library');
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, 'Unable to load model library'));
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { void load(); }, [category, published]);
+  const loadForFilters = useEffectEvent(() => { void load(); });
+  useEffect(() => { loadForFilters(); }, [category, published]);
   useEffect(() => {
     if (!image) { setImagePreview(''); return; }
     const url = URL.createObjectURL(image);
@@ -75,29 +76,29 @@ export default function AdminModelLibrary() {
         ? await api.patch(`/api/admin/model-library/${editing.id}`, body, { headers: await headers() })
         : await api.post('/api/admin/model-library', body, { headers: await headers() });
       toast.success(response.data.message);
-      reset(); await load();
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Unable to save model');
+      reset(); setLoading(true); await load();
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, 'Unable to save model'));
     } finally { setSaving(false); }
   };
 
   const togglePublished = async (model: Model) => {
     try {
       await api.patch(`/api/admin/model-library/${model.id}`, { isPublished: !model.isPublished }, { headers: await headers() });
-      toast.success(model.isPublished ? 'Model unpublished' : 'Model published'); await load();
-    } catch (error: any) { toast.error(error?.response?.data?.message || 'Unable to update model'); }
+      toast.success(model.isPublished ? 'Model unpublished' : 'Model published'); setLoading(true); await load();
+    } catch (error: unknown) { toast.error(getApiErrorMessage(error, 'Unable to update model')); }
   };
   const remove = async (model: Model) => {
     if (!window.confirm(`Delete “${model.name}” from the model library? Existing generated projects will retain their images.`)) return;
-    try { await api.delete(`/api/admin/model-library/${model.id}`, { headers: await headers() }); toast.success('Model deleted'); await load(); }
-    catch (error: any) { toast.error(error?.response?.data?.message || 'Unable to delete model'); }
+    try { await api.delete(`/api/admin/model-library/${model.id}`, { headers: await headers() }); toast.success('Model deleted'); setLoading(true); await load(); }
+    catch (error: unknown) { toast.error(getApiErrorMessage(error, 'Unable to delete model')); }
   };
 
   return <div className="space-y-5">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-      <label className="relative flex-1 sm:max-w-xs"><SearchIcon className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-500" /><span className="sr-only">Search models</span><input value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void load()} placeholder="Search models" className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-violet-400" /></label>
-      <select value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Filter category" className="rounded-xl border border-white/10 bg-[#171039] px-3 py-2.5 text-sm"><option value="">All categories</option>{page?.categories.map((item) => <option key={item}>{item}</option>)}</select>
-      <select value={published} onChange={(event) => setPublished(event.target.value)} aria-label="Filter publication status" className="rounded-xl border border-white/10 bg-[#171039] px-3 py-2.5 text-sm"><option value="">All statuses</option><option value="true">Published</option><option value="false">Unpublished</option></select>
+      <label className="relative flex-1 sm:max-w-xs"><SearchIcon className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-500" /><span className="sr-only">Search models</span><input value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { setLoading(true); void load(); } }} placeholder="Search models" className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-violet-400" /></label>
+      <select value={category} onChange={(event) => { setLoading(true); setCategory(event.target.value); }} aria-label="Filter category" className="rounded-xl border border-white/10 bg-[#171039] px-3 py-2.5 text-sm"><option value="">All categories</option>{page?.categories.map((item) => <option key={item}>{item}</option>)}</select>
+      <select value={published} onChange={(event) => { setLoading(true); setPublished(event.target.value); }} aria-label="Filter publication status" className="rounded-xl border border-white/10 bg-[#171039] px-3 py-2.5 text-sm"><option value="">All statuses</option><option value="true">Published</option><option value="false">Unpublished</option></select>
       <button type="button" onClick={beginCreate} className="flex min-h-10 items-center justify-center gap-2 rounded-xl bg-violet-500 px-4 text-sm font-semibold hover:bg-violet-400"><ImagePlusIcon className="size-4" />Add model</button>
     </div>
 

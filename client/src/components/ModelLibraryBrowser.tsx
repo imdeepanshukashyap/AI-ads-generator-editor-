@@ -1,6 +1,7 @@
 import { CheckIcon, SearchIcon, XIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import api from '../configs/axios';
+import { getApiErrorMessage } from '../utils/apiError';
 
 export type LibraryModel = {
   id: string;
@@ -30,11 +31,6 @@ export default function ModelLibraryBrowser({ open, selectedId, onClose, onSelec
 
   useEffect(() => {
     if (!open) return;
-    setSelected(models.find((model) => model.id === selectedId));
-  }, [open, selectedId]);
-
-  useEffect(() => {
-    if (!open) return;
     let active = true;
     const timeout = window.setTimeout(() => {
       setLoading(true);
@@ -44,15 +40,19 @@ export default function ModelLibraryBrowser({ open, selectedId, onClose, onSelec
       if (category) params.set('category', category);
       api.get(`/api/model-library?${params}`).then((response) => {
         if (!active) return;
-        setModels(response.data.data || []);
+        const loadedModels: LibraryModel[] = response.data.data || [];
+        setModels(loadedModels);
         setCategories(response.data.categories || []);
-        setSelected((current) => current && response.data.data?.some((item: LibraryModel) => item.id === current.id) ? current : undefined);
+        setSelected((current) => {
+          if (current && loadedModels.some((model) => model.id === current.id)) return current;
+          return loadedModels.find((model) => model.id === selectedId);
+        });
       }).catch((requestError) => {
-        if (active) setError(requestError?.response?.data?.message || 'Unable to load the model library');
+        if (active) setError(getApiErrorMessage(requestError, 'Unable to load the model library'));
       }).finally(() => active && setLoading(false));
     }, search ? 250 : 0);
     return () => { active = false; window.clearTimeout(timeout); };
-  }, [open, search, category, retryKey]);
+  }, [open, search, category, selectedId, retryKey]);
 
   useEffect(() => {
     if (!open) return;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import type { Project } from "../types";
 import { ImageIcon, Loader2Icon, RefreshCwIcon, SparkleIcon, VideoIcon } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -6,6 +6,7 @@ import { GhostButton, PrimaryButton } from "../components/Buttons";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import api from "../configs/axios";
 import toast from "react-hot-toast";
+import { getApiErrorMessage } from "../utils/apiError";
 
 const Result = () => {
     const { projectId } = useParams();
@@ -19,7 +20,7 @@ const Result = () => {
     const [selectedImageIndex, setSelectedImageIndex] = useState(0); // For bundle image selection
 
 
-    const fetchProjectData = async () => {
+    const fetchProjectData = useEffectEvent(async () => {
         try {
             const token = await getToken();
             const { data } = await api.get(`/api/user/projects/${projectId}`, {
@@ -28,11 +29,11 @@ const Result = () => {
             setProjectData(data.project);
             setIsGenerating(data.project.isGenerating);
             setLoading(false);
-        } catch (error: any) {
-            toast.error(error?.response?.data?.message || error.message);
-            console.log(error);
+        } catch (error: unknown) {
+            toast.error(getApiErrorMessage(error, "Unable to load project"));
+            console.error(error);
         }
-    };
+    });
 
     const handleGenerateVideo = async () => {
         setIsGenerating(true);
@@ -55,25 +56,25 @@ const Result = () => {
 
             toast.success(data.message);
             setIsGenerating(false);
-        } catch (error: any) {
-            toast.error(error?.response?.data?.message || error.message);
-            console.log(error);
+        } catch (error: unknown) {
+            toast.error(getApiErrorMessage(error, "Unable to generate video"));
+            console.error(error);
         }
     };
 
     useEffect(() => {
         if (user && !project.id) {
-            fetchProjectData();
+            void fetchProjectData();
         } else if (isLoaded && !user) {
             navigate("/");
         }
-    }, [user]);
+    }, [user, project.id, isLoaded, navigate]);
 
     // Fetch project every 10 seconds
     useEffect(() => {
         if (user && isGenerating) {
             const interval = setInterval(() => {
-                fetchProjectData();
+                void fetchProjectData();
             }, 10000);
             return () => clearInterval(interval);
         }

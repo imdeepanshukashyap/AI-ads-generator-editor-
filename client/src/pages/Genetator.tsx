@@ -6,6 +6,7 @@ import { useAuth, useUser } from "@clerk/clerk-react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import api from "../configs/axios";
+import { getApiErrorMessage } from "../utils/apiError";
 
 const inputClassName = "w-full rounded-xl border border-violet-200/[0.14] bg-white/[0.055] px-4 py-3.5 text-sm text-white outline-none transition placeholder:text-[#78748E] hover:border-violet-200/[0.24] focus:border-violet-300/60 focus:ring-4 focus:ring-violet-500/10";
 const labelClassName = "mb-2.5 block text-sm font-medium text-gray-200";
@@ -70,9 +71,9 @@ const Genetator = () => {
         toast.success(data.message || "Image generated successfully!");
       }
       navigate(`/result/${data.projectId}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       setIsGenerating(false);
-      toast.error(error?.response?.data?.message || error.message);
+      toast.error(getApiErrorMessage(error, "Unable to generate image"));
     }
   };
 

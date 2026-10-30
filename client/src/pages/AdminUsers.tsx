@@ -1,35 +1,45 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../configs/axios';
+import { getApiErrorMessage, getApiErrorStatus } from '../utils/apiError';
+
+type AdminUser = {
+    id: string;
+    name: string | null;
+    email: string;
+    role: 'USER' | 'ADMIN';
+    status: string;
+    credits: number;
+};
 
 const AdminUsers = () => {
     const { getToken } = useAuth();
     const navigate = useNavigate();
-    const [users, setUsers] = useState<any[]>([]);
+    const [users, setUsers] = useState<AdminUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [savingId, setSavingId] = useState<string | null>(null);
 
-    const loadUsers = async () => {
+    const loadUsers = useCallback(async () => {
         try {
             const token = await getToken();
             await api.get('/api/admin/me', { headers: { Authorization: `Bearer ${token}` } });
             const { data } = await api.get('/api/admin/users?page=1&limit=100', { headers: { Authorization: `Bearer ${token}` } });
             setUsers(data.data);
-        } catch (error: any) {
-            const status = error?.response?.status;
-            const message = status === 401 ? 'Your session has expired. Please sign in again.' : status === 403 ? 'This account is not an active admin.' : error?.response?.data?.message || 'Unable to load users';
+        } catch (error: unknown) {
+            const status = getApiErrorStatus(error);
+            const message = status === 401 ? 'Your session has expired. Please sign in again.' : status === 403 ? 'This account is not an active admin.' : getApiErrorMessage(error, 'Unable to load users');
             setError(message);
             toast.error(message);
             if (status === 401 || status === 403) navigate('/');
         } finally {
             setLoading(false);
         }
-    };
+    }, [getToken, navigate]);
 
-    useEffect(() => { loadUsers(); }, []);
+    useEffect(() => { void loadUsers(); }, [loadUsers]);
 
     const changeRole = async (userId: string, role: 'USER' | 'ADMIN') => {
         const user = users.find((item) => item.id === userId);
@@ -43,8 +53,8 @@ const AdminUsers = () => {
             const { data } = await api.patch(`/api/admin/users/${userId}`, { role }, { headers: { Authorization: `Bearer ${token}` } });
             setUsers((current) => current.map((item) => item.id === userId ? { ...item, ...data.data } : item));
             toast.success('User role updated');
-        } catch (error: any) {
-            toast.error(error?.response?.data?.message || 'Unable to change user role');
+        } catch (error: unknown) {
+            toast.error(getApiErrorMessage(error, 'Unable to change user role'));
         } finally {
             setSavingId(null);
         }
