@@ -31,3 +31,15 @@ services:
         sync: false
       - key: CLIENT_URL
         sync: false
+      - key: SERVER_PUBLIC_URL
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: SOCIAL_TOKEN_ENC_KEY
+        sync: false

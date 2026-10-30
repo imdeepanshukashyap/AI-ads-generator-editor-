@@ -8,8 +8,10 @@ import * as Sentry from "@sentry/node"
 import userRouter from "./routes/userRoutes.js";
 import projectRouter from "./routes/projectRoutes.js";
 import paymentRouter from "./routes/paymentRoutes.js";
+import socialRouter from "./routes/socialRoutes.js";
 import logger from './configs/logger.js';
 import { requestLogger, errorLogger } from './middlewares/requestLogger.js';
+import { startPublisherCron, stopPublisherCron } from './jobs/publisher.js';
 
 
 const app = express();
@@ -110,6 +112,9 @@ logger.info('Project routes registered at /api/project');
 app.use('/api/payment', paymentRouter)
 logger.info('Payment routes registered at /api/payment');
 
+app.use('/api/social', socialRouter)
+logger.info('Social routes registered at /api/social');
+
 // Error logging middleware (before Sentry error handler)
 app.use(errorLogger);
 
@@ -125,6 +130,9 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     timeout: '300000ms (5 minutes)',
   });
   console.log(`Server is running at http://0.0.0.0:${PORT}`);
+
+  // Start background social media publishing scheduler
+  startPublisherCron();
 });
 
 // Set server timeout (5 minutes for long-running AI operations)
@@ -134,6 +142,7 @@ logger.info('Server timeout configured', { timeout: '300000ms' });
 // Graceful shutdown handling
 process.on('SIGTERM', () => {
   logger.info('SIGTERM signal received - starting graceful shutdown');
+  stopPublisherCron();
   server.close(() => {
     logger.info('Server closed - all connections terminated');
     process.exit(0);
@@ -142,6 +151,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   logger.info('SIGINT signal received - starting graceful shutdown');
+  stopPublisherCron();
   server.close(() => {
     logger.info('Server closed - all connections terminated');
     process.exit(0);

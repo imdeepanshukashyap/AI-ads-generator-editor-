@@ -10,6 +10,8 @@ import MyGenerations from './pages/MyGenerations';
 import Community from './pages/Community';
 import Plans from './pages/Plans';
 import Loading from './pages/Loading';
+import Accounts from './pages/Accounts';
+import Posts from './pages/Posts';
 import {Toaster} from 'react-hot-toast'
 
 function App() {
@@ -26,6 +28,8 @@ function App() {
 				<Route path='/result/:projectId' element={<Result />}/>
 				<Route path='/my-generations' element={<MyGenerations />}/>
 				<Route path='/community' element={<Community />}/>
+				<Route path='/accounts' element={<Accounts />}/>
+				<Route path='/posts' element={<Posts />}/>
 				<Route path='/plans' element={<Plans />}/>
 				<Route path='/loading' element={<Loading />}/>
 				

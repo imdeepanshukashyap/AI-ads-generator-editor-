@@ -17,30 +17,33 @@ model User {
   updatedAt DateTime  @updatedAt
 
   // Relations
-  projects     Project[]
-  transactions Transaction[]
+  projects       Project[]
+  transactions   Transaction[]
+  socialAccounts SocialAccount[]
+  scheduledPosts ScheduledPost[]
 }
 
 model Project {
-  id                 String   @id @default(uuid())
+  id                 String          @id @default(uuid())
   name               String
   userId             String
   productName        String
-  productDescription String   @default("")
-  userPrompt         String   @default("")
-  aspectRatio        String   @default("9:16")
-  targetLength       Int      @default(5)
-  language           String   @default("English")
+  productDescription String          @default("")
+  userPrompt         String          @default("")
+  aspectRatio        String          @default("9:16")
+  targetLength       Int             @default(5)
+  language           String          @default("English")
   uploadedImages     String[]
-  generatedImage     String   @default("")      // Single image generation (5 credits)
-  generatedImages    String[] @default([])      // 3-image bundle generation (15 credits)
-  generatedVideo     String   @default("")
-  isGenerating       Boolean  @default(false)
-  isPublished        Boolean  @default(false)
-  error              String   @default("")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generatedImage     String          @default("")      // Single image generation (5 credits)
+  generatedImages    String[]        @default([])      // 3-image bundle generation (15 credits)
+  generatedVideo     String          @default("")
+  isGenerating       Boolean         @default(false)
+  isPublished        Boolean         @default(false)
+  error              String          @default("")
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledPosts     ScheduledPost[]
 }
 
 model Transaction {
@@ -59,4 +62,50 @@ model Transaction {
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SocialAccount {
+  id                    String          @id @default(uuid())
+  userId                String
+  platform              String          // instagram | facebook | youtube
+  externalId            String
+  displayName           String
+  encryptedAccessToken  String
+  encryptedRefreshToken String?
+  tokenExpiresAt        DateTime?
+  needsReconnect        Boolean         @default(false)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  // Relations
+  user                  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledPosts        ScheduledPost[]
+
+  @@unique([userId, platform, externalId])
+}
+
+model ScheduledPost {
+  id              String        @id @default(uuid())
+  userId          String
+  projectId       String
+  socialAccountId String
+  mediaType       String        // image | video
+  mediaUrl        String
+  caption         String        @default("")
+  aiDisclosure    Boolean       @default(false)
+  scheduledFor    DateTime?     // nullable = post now
+  status          String        @default("scheduled") // scheduled | publishing | published | failed
+  externalPostId  String?
+  externalUrl     String?
+  error           String?
+  attempts        Int           @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
 }

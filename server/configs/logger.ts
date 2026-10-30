@@ -55,7 +55,10 @@ export const maskSensitive = (data: any): any => {
     const sensitiveKeys = [
         'password', 'token', 'apiKey', 'api_key', 'secret',
         'authorization', 'cookie', 'creditCard', 'ssn',
-        'CLERK_SECRET_KEY', 'CLOUDINARY_API_SECRET', 'GOOGLE_API_KEY'
+        'CLERK_SECRET_KEY', 'CLOUDINARY_API_SECRET', 'GOOGLE_API_KEY',
+        'GOOGLE_OAUTH_CLIENT_SECRET', 'META_APP_SECRET', 'SOCIAL_TOKEN_ENC_KEY',
+        'encryptedAccessToken', 'encryptedRefreshToken',
+        'accessToken', 'refreshToken', 'access_token', 'refresh_token', 'client_secret'
     ];
 
     for (const key in masked) {

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import type { Project } from "../types";
-import { ImageIcon, Loader2Icon, RefreshCwIcon, SparkleIcon, VideoIcon } from "lucide-react";
+import { ImageIcon, Loader2Icon, RefreshCwIcon, SparkleIcon, VideoIcon, Share2Icon } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { GhostButton, PrimaryButton } from "../components/Buttons";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import api from "../configs/axios";
 import toast from "react-hot-toast";
+import { ShareModal } from "../components/ShareModal";
 
 const Result = () => {
     const { projectId } = useParams();
@@ -17,6 +18,7 @@ const Result = () => {
     const [loading, setLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
     const [selectedImageIndex, setSelectedImageIndex] = useState(0); // For bundle image selection
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
 
     const fetchProjectData = async () => {
@@ -191,6 +193,17 @@ const Result = () => {
                                         Download Video
                                     </GhostButton>
                                 </a>
+
+                                <div className="border-t border-violet-200/10 my-1"></div>
+
+                                {/* Share to Social Media Button */}
+                                <PrimaryButton
+                                    onClick={() => setIsShareModalOpen(true)}
+                                    className="w-full justify-center rounded-md py-3 bg-gradient-to-r from-pink-600 via-indigo-600 to-purple-600 hover:opacity-95 shadow-lg shadow-indigo-600/25"
+                                >
+                                    <Share2Icon className="size-4.5" />
+                                    Share to Social Media
+                                </PrimaryButton>
                             </div>
                         </div>
 
@@ -227,6 +240,18 @@ const Result = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Social Share & Scheduling Modal */}
+            <ShareModal
+                isOpen={isShareModalOpen}
+                onClose={() => setIsShareModalOpen(false)}
+                project={project}
+                initialSelectedMedia={
+                    project.generatedImages && project.generatedImages.length > 0 
+                        ? project.generatedImages[selectedImageIndex] 
+                        : (project.generatedVideo || project.generatedImage)
+                }
+            />
         </div>
     );
 };
