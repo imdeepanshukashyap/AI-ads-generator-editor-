@@ -69,7 +69,7 @@ export default function ModelLibraryBrowser({ open, selectedId, onClose, onSelec
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-end justify-center bg-[#080713]/85 p-0 backdrop-blur-md sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-labelledby="model-library-title" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-110 flex items-end justify-center bg-[#080713]/85 p-0 backdrop-blur-md sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-labelledby="model-library-title" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-3xl border border-violet-200/20 bg-[#100e25]/95 shadow-[0_28px_100px_rgba(5,3,20,.8)] sm:rounded-3xl">
         <header className="flex items-start justify-between border-b border-violet-200/10 px-5 py-5 sm:px-7">
           <div>
@@ -84,7 +84,7 @@ export default function ModelLibraryBrowser({ open, selectedId, onClose, onSelec
           <label className="relative flex-1">
             <SearchIcon className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
             <span className="sr-only">Search models</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search models" className="h-11 w-full rounded-xl border border-violet-200/[0.14] bg-white/[0.055] pl-10 pr-4 text-sm outline-none focus:border-violet-300/60 focus:ring-4 focus:ring-violet-500/10" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search models" className="h-11 w-full rounded-xl border border-violet-200/14 bg-white/5 pl-10 pr-4 text-sm outline-none focus:border-violet-300/60 focus:ring-4 focus:ring-violet-500/10" />
           </label>
           <select value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Filter by category" className="h-11 rounded-xl border border-violet-200/[0.14] bg-[#171039] px-3 text-sm outline-none focus:border-violet-300/60">
             <option value="">All categories</option>
@@ -93,12 +93,12 @@ export default function ModelLibraryBrowser({ open, selectedId, onClose, onSelec
         </div>
 
         <div className="min-h-72 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
-          {loading ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }, (_, index) => <div key={index} className="aspect-4/5 animate-pulse rounded-2xl border border-white/5 bg-white/[0.04]" />)}</div>
+          {loading ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }, (_, index) => <div key={index} className="aspect-4/5 animate-pulse rounded-2xl border border-white/5 bg-white/4" />)}</div>
             : error ? <div className="flex min-h-72 items-center justify-center text-center"><div><p className="text-rose-300">{error}</p><button type="button" onClick={() => setRetryKey((value) => value + 1)} className="mt-4 rounded-lg border border-violet-300/20 px-4 py-2 text-sm">Retry</button></div></div>
               : models.length === 0 ? <div className="min-h-72 text-center"><p className="text-slate-300">No published models match this search.</p></div>
                 : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{models.map((model) => {
                   const isSelected = selected?.id === model.id;
-                  return <button type="button" key={model.id} onClick={() => setSelected(model)} aria-pressed={isSelected} className={`group overflow-hidden rounded-2xl border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${isSelected ? 'border-violet-300/70 bg-violet-500/15 shadow-[0_12px_35px_rgba(139,92,246,.16)]' : 'border-violet-200/[0.12] bg-white/[0.035] hover:border-violet-300/35'}`}>
+                  return <button type="button" key={model.id} onClick={() => setSelected(model)} aria-pressed={isSelected} className={`group overflow-hidden rounded-2xl border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${isSelected ? 'border-violet-300/70 bg-violet-500/15 shadow-[0_12px_35px_rgba(139,92,246,.16)]' : 'border-violet-200/12 bg-white/[0.035] hover:border-violet-300/35'}`}>
                     <span className="relative block aspect-4/5 overflow-hidden bg-black/20">
                       <img src={model.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
                       {isSelected && <span className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-violet-500 text-white"><CheckIcon className="size-4" /></span>}
