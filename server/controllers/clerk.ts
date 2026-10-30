@@ -3,6 +3,7 @@ import { verifyWebhook } from '@clerk/express/webhooks'
 import { prisma } from '../configs/prisma.js';
 import * as Sentry from "@sentry/node"
 import logger, { maskSensitive } from '../configs/logger.js';
+import { anonymizeDeletedAccount } from '../services/accountDeletionService.js';
 
 /**
  * Clerk Webhooks Handler
@@ -86,13 +87,22 @@ const clerkWebhooks = async (req: Request, res: Response) => {
                     userId: data.id,
                 });
 
-                // Database operation: Delete user
-                await prisma.user.delete({ where: { id: data.id } })
+                // Delete the user's projects and anonymize the account instead of deleting
+                // the row, which would cascade to payment, credit-history and audit records.
+                const result = await anonymizeDeletedAccount(prisma, data.id)
 
-                logger.info('[clerkWebhooks] User deleted successfully', { userId: data.id });
+                logger.info('[clerkWebhooks] User account anonymized; financial and audit records kept', {
+                    userId: data.id,
+                    found: result.found,
+                    projectsDeleted: result.projectsDeleted,
+                });
                 break;
             }
 
+            // Legacy Clerk Billing path. Checkout moved to Razorpay on 2026-02-18, but
+            // subscriptions started before then may still renew here. Kept until the
+            // Clerk Dashboard confirms there are none; every grant is reported to Sentry
+            // so any remaining use is visible. Not idempotent across redeliveries.
             case "paymentAttempt.updated": {
                 logger.info('[clerkWebhooks] Processing paymentAttempt.updated event', {
                     chargeType: data.charge_type,
@@ -131,10 +141,12 @@ const clerkWebhooks = async (req: Request, res: Response) => {
                         }
                     })
 
-                    logger.info('[clerkWebhooks] Credits added successfully', {
+                    logger.warn('[clerkWebhooks] Credits added via legacy Clerk Billing', {
                         userId: clerkUserId,
                         creditsAdded: credits[planId],
+                        chargeType: data.charge_type,
                     });
+                    Sentry.captureMessage(`Legacy Clerk Billing granted ${credits[planId]} credits (${data.charge_type}, plan ${planId})`, 'warning');
                 }
                 break;
             }

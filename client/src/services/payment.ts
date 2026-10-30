@@ -4,7 +4,9 @@ export interface CreateOrderResponse {
     orderId: string;
     amount: number;
     currency: string;
+    // Public key id for Checkout, from the server so it always matches the server's secret.
     keyId: string;
+    mode?: 'test' | 'live';
 }
 
 export interface VerifyPaymentRequest {
@@ -16,6 +18,8 @@ export interface VerifyPaymentRequest {
 export interface VerifyPaymentResponse {
     message: string;
     credits: number;
+    // 'pending' (HTTP 202): paid but not yet captured; credits are added once Razorpay confirms it.
+    status?: 'credited' | 'already_processed' | 'pending';
 }
 
 /**

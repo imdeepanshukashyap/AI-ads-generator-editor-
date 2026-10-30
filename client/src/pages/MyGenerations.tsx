@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useEffectEvent, useState } from "react"
 import type { Project } from "../types"
 import { Loader2Icon } from "lucide-react"
 import ProjectCard from "../components/ProjectCard"
@@ -7,6 +7,7 @@ import { useAuth, useUser } from "@clerk/clerk-react"
 import { useNavigate } from "react-router-dom"
 import api from "../configs/axios"
 import toast from "react-hot-toast"
+import { getApiErrorMessage } from "../utils/apiError"
 
 
 const MyGenerations = () => {
@@ -18,7 +19,7 @@ const MyGenerations = () => {
   const [generations, setGenerations] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   
-    const fetchMyGenerations = async ()=>{
+    const fetchMyGenerations = useEffectEvent(async ()=>{
       try {
         const token = await getToken();
         const { data } = await api.get('/api/user/projects', {
@@ -26,20 +27,22 @@ const MyGenerations = () => {
         })
         setGenerations(data.projects)
         setLoading(false)
-      } catch (error: any) {
-        toast.error(error?.response?.data?.message || error.message);
-        console.log(error);
+      } catch (error: unknown) {
+        toast.error(getApiErrorMessage(error, "Unable to load your generations"));
+        console.error(error);
+      } finally {
+        setLoading(false);
       }
-    }
+    });
   
-    useEffect(()=>{
+    useEffect(() => {
       if(user){
-         fetchMyGenerations()
+         void fetchMyGenerations()
       } else if(isLoaded && !user){
         navigate('/')
       }
      
-    },[user])
+    },[user, isLoaded, navigate])
 
   return loading ? (
     <div className="flex items-center justify-center min-h-screen">

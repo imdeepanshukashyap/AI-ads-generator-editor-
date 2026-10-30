@@ -1,4 +1,4 @@
-import type React from "react";
+﻿import type React from "react";
 
 
 export interface UploadZoneProps {
@@ -6,6 +6,9 @@ export interface UploadZoneProps {
     file: File | null;
     onClear: () => void;
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    previewUrl?: string;
+    previewLabel?: string;
+    onChooseLibrary?: () => void;
 }
 
 export interface User {
@@ -72,4 +75,4 @@ export interface ScheduledPost {
         name: string;
         productName: string;
     };
-}
+}
