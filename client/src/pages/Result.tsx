@@ -1,4 +1,4 @@
-﻿import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import type { Project } from "../types";
 import { ImageIcon, Loader2Icon, RefreshCwIcon, SparkleIcon, VideoIcon, Share2Icon } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";

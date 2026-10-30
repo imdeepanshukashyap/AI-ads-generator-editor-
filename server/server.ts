@@ -1,4 +1,4 @@
-﻿import './configs/loadEnv.js';
+import './configs/loadEnv.js';
 import "./configs/instrument.mjs"
 import express, { Request, Response } from 'express';
 import cors from 'cors'
