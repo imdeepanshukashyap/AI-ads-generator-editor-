@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/node";
 import { prisma } from '../configs/prisma.js';
 import { getAuth } from '@clerk/express';
 import logger from '../configs/logger.js';
+import { syncUserFromClerk } from '../services/clerkUserService.js';
 
 /**
  * Get User Credits
@@ -24,38 +25,9 @@ export const getUserCredits = async (req: Request, res: Response) => {
             return res.status(401).json({ message: 'Unauthorized' });
         }
 
-        // Database query: Get or create user with proper error handling
+        // Synchronize identity from Clerk when webhook delivery is delayed.
         logger.debug('[getUserCredits] Fetching user from database', { userId });
-        let user = await prisma.user.findUnique({
-            where: { id: userId }
-        })
-
-        // Handle race condition: if webhook hasn't created user yet, create them
-        if (!user) {
-            logger.warn('[getUserCredits] User not found - auto-creating', { userId });
-            try {
-                user = await prisma.user.create({
-                    data: {
-                        id: userId,
-                        email: 'pending@clerk.sync', // Will be updated by webhook
-                        name: 'Pending Sync',
-                        image: '',
-                        credits: 20
-                    }
-                });
-                logger.info('[getUserCredits] User auto-created successfully', {
-                    userId,
-                    initialCredits: 20,
-                });
-            } catch (error: any) {
-                logger.error('[getUserCredits] Failed to auto-create user', {
-                    userId,
-                    error: error.message,
-                    stack: error.stack,
-                });
-                return res.status(500).json({ message: 'Failed to initialize user account. Please try again.' });
-            }
-        }
+        const user = await syncUserFromClerk(userId);
 
         logger.info('[getUserCredits] Request completed successfully', {
             userId,

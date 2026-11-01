@@ -13,34 +13,53 @@ model User {
   name      String
   image     String
   credits   Int       @default(20)
+  role      String    @default("USER")
+  status    String    @default("active")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
   // Relations
-  projects     Project[]
-  transactions Transaction[]
+  projects                Project[]
+  transactions            Transaction[]
+  socialAccounts          SocialAccount[]
+  scheduledPosts          ScheduledPost[]
+  adminLogs               AdminLog[]
+  creditTransactions      CreditTransaction[] @relation("CreditUser")
+  adminCreditTransactions CreditTransaction[] @relation("CreditAdmin")
+  modelLibraryEntries     ModelLibraryEntry[]
+
+  @@index([email])
+  @@index([role])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model Project {
-  id                 String   @id @default(uuid())
+  id                 String          @id @default(uuid())
   name               String
   userId             String
   productName        String
-  productDescription String   @default("")
-  userPrompt         String   @default("")
-  aspectRatio        String   @default("9:16")
-  targetLength       Int      @default(5)
-  language           String   @default("English")
+  productDescription String          @default("")
+  userPrompt         String          @default("")
+  aspectRatio        String          @default("9:16")
+  targetLength       Int             @default(5)
+  language           String          @default("English")
   uploadedImages     String[]
-  generatedImage     String   @default("")      // Single image generation (5 credits)
-  generatedImages    String[] @default([])      // 3-image bundle generation (15 credits)
-  generatedVideo     String   @default("")
-  isGenerating       Boolean  @default(false)
-  isPublished        Boolean  @default(false)
-  error              String   @default("")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generatedImage     String          @default("")      // Single image generation (5 credits)
+  generatedImages    String[]        @default([])      // 3-image bundle generation (15 credits)
+  generatedVideo     String          @default("")
+  isGenerating       Boolean         @default(false)
+  isPublished        Boolean         @default(false)
+  error              String          @default("")
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledPosts     ScheduledPost[]
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([isGenerating])
+  @@index([isPublished])
 }
 
 model Transaction {
@@ -49,14 +68,131 @@ model Transaction {
   planId            String
   planName          String
   amount            Int      // Amount in smallest currency unit (paise for INR)
+  currency          String   @default("INR")
   credits           Int
   razorpayOrderId   String   @unique
   razorpayPaymentId String?
   razorpaySignature String?
-  status            String   @default("pending") // pending, success, failed
+  status            String   @default("pending") // pending, success (credited), failed, refunded (closed before crediting), refunded_after_credit (credited, then refunded; for review)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([userId, status, createdAt])
+  @@index([status, createdAt])
+}
+
+model AdminLog {
+  id          String   @id @default(uuid())
+  adminId     String
+  action      String
+  targetType  String
+  targetId    String?
+  description String
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  admin       User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([action])
+  @@index([targetType])
+  @@index([createdAt])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model ModelLibraryEntry {
+  id            String   @id @default(uuid())
+  name          String
+  description   String   @default("")
+  category      String   @default("General")
+  tags          String[] @default([])
+  imageUrl      String
+  imagePublicId String
+  isPublished   Boolean  @default(false)
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([isPublished])
+  @@index([category])
+  @@index([createdById])
+  @@index([createdAt])
+}
+
+model CreditTransaction {
+  id        String   @id @default(uuid())
+  userId    String
+  adminId   String?
+  projectId String?
+  type      String
+  amount    Int
+  balance   Int
+  reason    String
+  createdAt DateTime @default(now())
+  user      User     @relation("CreditUser", fields: [userId], references: [id], onDelete: Cascade)
+  admin     User?    @relation("CreditAdmin", fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([adminId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model SocialAccount {
+  id                    String          @id @default(uuid())
+  userId                String
+  platform              String          // instagram | facebook | youtube
+  externalId            String
+  displayName           String
+  encryptedAccessToken  String
+  encryptedRefreshToken String?
+  tokenExpiresAt        DateTime?
+  needsReconnect        Boolean         @default(false)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  // Relations
+  user                  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledPosts        ScheduledPost[]
+
+  @@unique([userId, platform, externalId])
+}
+
+model ScheduledPost {
+  id              String        @id @default(uuid())
+  userId          String
+  projectId       String
+  socialAccountId String
+  mediaType       String        // image | video
+  mediaUrl        String
+  caption         String        @default("")
+  aiDisclosure    Boolean       @default(false)
+  scheduledFor    DateTime?     // nullable = post now
+  status          String        @default("scheduled") // scheduled | publishing | published | failed
+  externalPostId  String?
+  externalUrl     String?
+  error           String?
+  attempts        Int           @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
 }

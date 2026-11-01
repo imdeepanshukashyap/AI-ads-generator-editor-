@@ -70,7 +70,9 @@ cd ../server && npm install
 # Setup .env files (see Part 3, Section 8)
 # Get API keys: Clerk, Google AI, Cloudinary, PostgreSQL
 
-# Setup database
+# Setup database (a NEW, EMPTY local/development database only)
+# Never run `prisma db push` or `prisma migrate deploy` against production:
+# production changes use a backup and reviewed SQL (PAYMENTS_LIVE_READINESS.md, section 5).
 cd server
 npx prisma generate
 npx prisma db push
@@ -227,8 +229,9 @@ npm run build    # Compile TypeScript
 cd server
 npx prisma studio        # Open database GUI
 npx prisma generate      # Generate Prisma client
-npx prisma db push       # Push schema changes
-npx prisma migrate dev   # Create migration
+npx prisma db push       # Push schema changes: disposable/local databases ONLY, never production
+npx prisma migrate dev   # Create migration: local only; prisma/migrations does not match production yet
+# Production: backup + reviewed additive SQL only (see PAYMENTS_LIVE_READINESS.md, section 5)
 ```
 
 ---
@@ -246,6 +249,13 @@ npx prisma migrate dev   # Create migration
 - `GET /projects` - Get user's projects
 - `GET /projects/:projectId` - Get specific project
 - `PATCH /project/:projectId/publish` - Toggle publish
+
+**Payment Routes** (`/api/payment`) — see [PAYMENTS_LIVE_READINESS.md](./PAYMENTS_LIVE_READINESS.md):
+- `POST /create-order` - Create a Razorpay order for a plan (auth)
+- `POST /verify` - Verify a completed checkout and add credits once (auth)
+- `POST /webhook` - Razorpay webhook (signature-verified, raw body)
+
+Payment tests: `cd server && npm test` (unit) · `npm run test:integration` (real database / Razorpay test mode, opt-in) · `npm run check:payments` (env check)
 
 ---
 
@@ -278,6 +288,7 @@ cd server && npx prisma studio
 | **Backend** | [Part 2](./TECHNICAL_DOCUMENTATION_PART2.md) | Express server, controllers, logging, error handling |
 | **Database & Integrations** | [Part 3](./TECHNICAL_DOCUMENTATION_PART3.md) | Prisma schema, AI services, end-to-end flows, setup |
 | **Status & Contribution** | [Part 4](./TECHNICAL_DOCUMENTATION_PART4.md) | Project status, contribution guide, testing, debugging |
+| **Payments** | [Live readiness](./PAYMENTS_LIVE_READINESS.md) | Razorpay flow, env vars, webhook, reconciliation, activation checklist |
 
 ---
 

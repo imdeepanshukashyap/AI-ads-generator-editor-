@@ -1,24 +1,67 @@
 import { useState } from 'react';
-import { useAuth, useUser } from '@clerk/clerk-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth, useClerk, useUser } from '@clerk/clerk-react';
 import { CheckIcon } from 'lucide-react';
 import { plansData } from '../assets/dummy-data';
 import { createOrder, verifyPayment } from '../services/payment';
+import { PolicyLink } from './LegalLayout';
 import toast from 'react-hot-toast';
+import { isAxiosError } from 'axios';
+
+// The parts of Razorpay Checkout (loaded from checkout.js in index.html) used here.
+interface RazorpaySuccessResponse {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+}
+
+interface RazorpayPaymentFailedEvent {
+    error?: { description?: string };
+}
+
+interface RazorpayCheckout {
+    on(event: 'payment.failed', handler: (response: RazorpayPaymentFailedEvent) => void): void;
+    open(): void;
+}
 
 declare global {
     interface Window {
-        Razorpay: any;
+        Razorpay?: new (options: object) => RazorpayCheckout;
     }
 }
+
+// Free credits are granted at sign-up; this plan is never sent to checkout.
+const FREE_PLAN_ID = 'starter';
+
+const serverMessage = (error: unknown): string | undefined =>
+    isAxiosError<{ message?: string }>(error) ? error.response?.data?.message : undefined;
 
 export default function Pricing() {
     const { user } = useUser();
     const { getToken } = useAuth();
+    const { openSignUp } = useClerk();
+    const navigate = useNavigate();
     const [loading, setLoading] = useState<string | null>(null);
 
     const handlePurchase = async (planId: string) => {
+        if (planId === FREE_PLAN_ID) {
+            if (!user) {
+                openSignUp();
+            } else {
+                navigate('/generate');
+                scrollTo(0, 0);
+            }
+            return;
+        }
+
         if (!user) {
             toast.error('Please sign in to purchase a plan');
+            return;
+        }
+
+        const Razorpay = window.Razorpay;
+        if (!Razorpay) {
+            toast.error('Payment checkout failed to load. Please refresh the page and try again.');
             return;
         }
 
@@ -33,24 +76,34 @@ export default function Pricing() {
                 return;
             }
 
-            // Create order on backend
+            // Create order on backend (price and credits are decided server-side)
             const orderData = await createOrder(planId, token);
+            const plan = plansData.find(p => p.id === planId);
+
+            // Only the server's key id is used, so Checkout can't open in a different mode or account
+            if (!orderData.keyId) {
+                toast.error('Payments are not configured correctly. Please try again later.');
+                setLoading(null);
+                return;
+            }
+            if (orderData.mode === 'test') {
+                toast('Test mode: no real money will be charged.', { icon: '🧪', duration: 6000 });
+            }
 
             // Razorpay checkout options
             const options = {
-                key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+                key: orderData.keyId,
                 amount: orderData.amount,
                 currency: orderData.currency,
                 name: 'AdGen Studio',
-                description: `Purchase ${plansData.find(p => p.id === planId)?.name} Plan`,
+                description: `${plan?.name} credit pack (${plan?.credits} credits)`,
                 order_id: orderData.orderId,
-                handler: async function (response: any) {
+                handler: async function (response: RazorpaySuccessResponse) {
                     try {
                         // Get fresh Clerk token for verification
                         const verificationToken = await getToken();
                         if (!verificationToken) {
-                            toast.error('Authentication failed. Please sign in again.');
-                            setLoading(null);
+                            toast.error(`Authentication failed. If money was deducted, your credits will be added automatically once the payment is confirmed (order ${orderData.orderId}).`);
                             return;
                         }
 
@@ -61,15 +114,23 @@ export default function Pricing() {
                             razorpay_signature: response.razorpay_signature
                         }, verificationToken);
 
+                        if (result.status === 'pending') {
+                            toast(result.message, { icon: '⏳', duration: 10000 });
+                            return;
+                        }
+
                         toast.success(`Payment successful! ${result.credits} credits added to your account.`);
 
                         // Reload page to update credits
                         setTimeout(() => {
                             window.location.reload();
                         }, 1500);
-                    } catch (error: any) {
+                    } catch (error) {
                         console.error('Payment verification failed:', error);
-                        toast.error(error?.response?.data?.message || 'Payment verification failed');
+                        toast.error(
+                            `${serverMessage(error) || 'Payment verification failed.'} Need help? Contact support with order ID ${orderData.orderId}.`,
+                            { duration: 10000 }
+                        );
                     } finally {
                         setLoading(null);
                     }
@@ -89,12 +150,16 @@ export default function Pricing() {
                 }
             };
 
-            const razorpay = new window.Razorpay(options);
+            const razorpay = new Razorpay(options);
+            // Checkout stays open so the customer can retry; no credits are granted for failed attempts.
+            razorpay.on('payment.failed', (response: RazorpayPaymentFailedEvent) => {
+                toast.error(response?.error?.description || 'Payment failed. No credits were added — you can try again.');
+            });
             razorpay.open();
 
-        } catch (error: any) {
+        } catch (error) {
             console.error('Order creation failed:', error);
-            toast.error(error?.response?.data?.message || 'Failed to create order');
+            toast.error(serverMessage(error) || 'Failed to create order');
             setLoading(null);
         }
     };
@@ -129,13 +194,13 @@ export default function Pricing() {
                                 {/* Price */}
                                 <div className="flex items-baseline gap-1 mb-1">
                                     <span className="text-5xl font-bold text-white">{plan.price}</span>
-                                    {plan.id !== 'starter' && <span className="text-gray-400 text-lg">/month</span>}
+                                    {plan.id !== FREE_PLAN_ID && <span className="text-gray-400 text-lg">one-time</span>}
                                 </div>
 
-                                {plan.id === 'starter' ? (
-                                    <p className="text-sm text-gray-400">Always free</p>
+                                {plan.id === FREE_PLAN_ID ? (
+                                    <p className="text-sm text-gray-400">No payment required</p>
                                 ) : (
-                                    <p className="text-sm text-gray-400">Only billed monthly</p>
+                                    <p className="text-sm text-gray-400">No subscription · no auto-renewal</p>
                                 )}
                             </div>
 
@@ -152,7 +217,7 @@ export default function Pricing() {
                                 ))}
                             </ul>
 
-                            {/* Subscribe Button */}
+                            {/* Purchase Button */}
                             <button
                                 onClick={() => handlePurchase(plan.id)}
                                 disabled={loading === plan.id}
@@ -169,13 +234,24 @@ export default function Pricing() {
                                         </svg>
                                         Processing...
                                     </span>
+                                ) : plan.id === FREE_PLAN_ID ? (
+                                    user ? 'Start creating' : 'Get started free'
                                 ) : (
-                                    'Subscribe'
+                                    'Buy credits'
                                 )}
                             </button>
                         </div>
                     ))}
                 </div>
+
+                {/* Purchase terms shown before checkout */}
+                <p className="mt-12 text-center text-sm text-gray-400 max-w-3xl mx-auto leading-relaxed">
+                    Prices are in Indian Rupees (INR); the amount shown in the Razorpay checkout is the total you pay. Credit packs are
+                    one-time purchases with no subscription or automatic renewal, delivered to your account as credits (see our{' '}
+                    <PolicyLink to="shipping" />), and payments are processed by Razorpay. By purchasing,
+                    you agree to our <PolicyLink to="terms" /> and <PolicyLink to="refund" />. See our <PolicyLink to="privacy" />, or{' '}
+                    <PolicyLink to="contact">contact support</PolicyLink> with any questions.
+                </p>
             </div>
         </section>
     );

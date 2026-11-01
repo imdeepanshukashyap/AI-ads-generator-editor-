@@ -1,0 +1,283 @@
+import { useCallback, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import type { AxiosRequestConfig } from 'axios';
+import { ClipboardListIcon, CoinsIcon, LayoutDashboardIcon, LibraryIcon, Loader2Icon, LogOutIcon, MenuIcon, SettingsIcon, ShieldCheckIcon, SparklesIcon, UsersIcon, VideoIcon, XIcon } from 'lucide-react';
+import { useAuth, useClerk, useUser } from '@clerk/clerk-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import api from '../configs/axios';
+import { getApiErrorMessage, getApiErrorStatus } from '../utils/apiError';
+import AdminUsers from './AdminUsers';
+import AdminSettings from './AdminSettings';
+import AdminModelLibrary from './AdminModelLibrary';
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+
+type AdminResponse<T> = { data: T; message?: string; success?: boolean };
+type AdminPage<T> = AdminResponse<T[]> & {
+    pagination?: { page: number; limit: number; total: number; totalPages: number };
+};
+type RecentUser = { id: string; name: string | null; email: string; createdAt: string };
+type RecentGeneration = { id: string; name: string; status: string; userId: string; createdAt: string };
+type RecentAdminAction = { id: string; action: string; description: string; createdAt: string };
+type Dashboard = {
+    totalUsers: number;
+    activeUsers: number;
+    totalGenerations: number;
+    successfulGenerations: number;
+    imageGenerations: number;
+    videoGenerations: number;
+    carouselGenerations: number;
+    failedGenerations: number;
+    totalCreditsUsed: number;
+    totalCreditsRemaining: number;
+    recentUsers: RecentUser[];
+    recentGenerations: RecentGeneration[];
+    recentAdminActions: RecentAdminAction[];
+};
+type Series = { labels: string[]; data: number[] };
+type Analytics = { generations: Series; users: Series; credits: Series };
+type Generation = {
+    id: string;
+    name: string;
+    userId: string;
+    user?: { name: string | null; email: string };
+    type: string;
+    status: string;
+    model: string;
+    creditsConsumed: number;
+    createdAt: string;
+};
+type AdminRecord = Record<string, unknown>;
+
+const cardClass = 'glass-panel rounded-xl p-5';
+const nav = [['/admin', 'Dashboard', LayoutDashboardIcon], ['/admin/users', 'Users', UsersIcon], ['/admin/generations', 'Generations', SparklesIcon], ['/admin/model-library', 'AI Model Library', LibraryIcon], ['/admin/credits', 'Credits', CoinsIcon], ['/admin/ai-monitoring', 'AI Monitoring', VideoIcon], ['/admin/logs', 'Audit Logs', ClipboardListIcon], ['/admin/settings', 'Settings', SettingsIcon]] as const;
+
+const useAdminApi = () => {
+    const { getToken } = useAuth();
+
+    return useCallback(async <T,>(url: string, options: AxiosRequestConfig = {}) => {
+        const token = await getToken();
+        return api.request<T>({
+            url,
+            ...options,
+            headers: { Authorization: `Bearer ${token}`, ...options.headers },
+        });
+    }, [getToken]);
+};
+
+const getRows = (value: unknown): AdminRecord[] => {
+    const rows = Array.isArray(value)
+        ? value
+        : typeof value === 'object' && value !== null && 'data' in value && Array.isArray(value.data)
+            ? value.data
+            : [];
+    return rows.filter((item): item is AdminRecord => typeof item === 'object' && item !== null);
+};
+
+const getText = (...values: unknown[]): string | number => {
+    const value = values.find((item) => typeof item === 'string' || typeof item === 'number');
+    return typeof value === 'string' || typeof value === 'number' ? value : '-';
+};
+
+const getNestedText = (value: unknown): unknown =>
+    typeof value === 'object' && value !== null && 'name' in value ? value.name : undefined;
+
+const formatDate = (value: unknown): string => {
+    if (typeof value !== 'string' && typeof value !== 'number' && !(value instanceof Date)) return '-';
+    return new Date(value).toLocaleString();
+};
+
+const Loading = () => <div className='flex items-center justify-center py-24 text-violet-300'><Loader2Icon className='size-8 animate-spin' /></div>;
+const Empty = ({ text }: { text: string }) => <div className='py-14 text-center text-gray-500'>{text}</div>;
+
+const Overview = () => {
+    const call = useAdminApi();
+    const [data, setData] = useState<Dashboard | null>(null);
+    const [analytics, setAnalytics] = useState<Analytics | null>(null);
+    const [period, setPeriod] = useState('7d');
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let active = true;
+        void Promise.all([
+            call<AdminResponse<Dashboard>>('/api/admin/dashboard'),
+            call<AdminResponse<Analytics>>(`/api/admin/analytics?period=${period}`),
+        ]).then(([dashboard, chart]) => {
+            if (!active) return;
+            setData(dashboard.data.data);
+            setAnalytics(chart.data.data);
+        }).catch((error: unknown) => {
+            if (active) {
+                toast.error(getApiErrorStatus(error) === 403
+                    ? 'This account is not an active admin.'
+                    : getApiErrorMessage(error, 'Unable to load dashboard data'));
+            }
+        }).finally(() => {
+            if (active) setLoading(false);
+        });
+
+        return () => { active = false; };
+    }, [call, period]);
+
+    if (loading || !data) return <Loading />;
+
+    const cards: [string, number][] = [
+        ['Total Users', data.totalUsers],
+        ['Active Users', data.activeUsers],
+        ['Generations', data.totalGenerations],
+        ['Successful Generations', data.successfulGenerations],
+        ['Failed Generations', data.failedGenerations],
+        ['Credits Used', data.totalCreditsUsed],
+        ['Credits Remaining', data.totalCreditsRemaining],
+    ];
+    const trend = analytics?.generations.labels.map((label, index) => ({
+        label: label.slice(5),
+        generations: analytics.generations.data[index],
+        users: analytics.users.data[index],
+        credits: analytics.credits.data[index],
+    })) || [];
+    const activity = [
+        ...data.recentGenerations.map((item) => ({ text: `${item.name} generation`, detail: `${item.status} · ${item.userId}`, date: item.createdAt })),
+        ...data.recentUsers.map((item) => ({ text: `New user ${item.name || item.email}`, detail: 'USER_REGISTERED', date: item.createdAt })),
+        ...data.recentAdminActions.map((item) => ({ text: item.description, detail: item.action, date: item.createdAt })),
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return <div className='space-y-6'>
+        <div className='flex justify-end'>
+            <select value={period} onChange={(event) => { setLoading(true); setPeriod(event.target.value); }} className='bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm'>
+                <option value='7d'>7 Days</option><option value='30d'>30 Days</option><option value='90d'>90 Days</option><option value='1y'>1 Year</option>
+            </select>
+        </div>
+        <section className='grid grid-cols-2 xl:grid-cols-4 gap-4'>
+            {cards.map(([label, value]) => <div className={cardClass} key={label}><p className='text-gray-400 text-sm'>{label}</p><p className='text-2xl font-semibold mt-2'>{value}</p></div>)}
+        </section>
+        <section className='grid lg:grid-cols-3 gap-6'>
+            <div className={`${cardClass} lg:col-span-2`}>
+                <h2 className='font-semibold mb-5'>Generation Activity</h2>
+                <div className='h-72'><ResponsiveContainer><BarChart data={trend}><CartesianGrid strokeDasharray='3 3' stroke='#ffffff15' /><XAxis dataKey='label' stroke='#94a3b8' /><YAxis stroke='#94a3b8' /><Tooltip contentStyle={{ background: '#18132b', border: '1px solid #ffffff20' }} /><Legend /><Bar dataKey='generations' fill='#8b5cf6' /><Bar dataKey='users' fill='#22d3ee' /><Bar dataKey='credits' fill='#f59e0b' /></BarChart></ResponsiveContainer></div>
+            </div>
+            <div className={cardClass}>
+                <h2 className='font-semibold mb-5'>Generation Types</h2>
+                <div className='h-72'><ResponsiveContainer><PieChart><Pie data={[{ name: 'Image', value: data.imageGenerations }, { name: 'Video', value: data.videoGenerations }, { name: 'Carousel', value: data.carouselGenerations }]} dataKey='value' nameKey='name' outerRadius={90} label>{['#8b5cf6', '#22d3ee', '#f59e0b'].map((color) => <Cell key={color} fill={color} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div>
+            </div>
+        </section>
+        <section className={cardClass}>
+            <div className='flex items-center justify-between mb-4'><h2 className='font-semibold'>Recent Activity</h2><span className='text-xs text-gray-500'>{activity.length} records</span></div>
+            {activity.length === 0 ? <Empty text='No recent activity' /> : <div className='max-h-96 overflow-y-auto pr-2 space-y-3'>{activity.map((item, index) => <div key={`${item.date}-${index}`} className='flex items-start justify-between gap-4 border-b border-white/5 pb-3 text-sm'><div><p>{item.text}</p><p className='text-xs text-gray-500 mt-1'>{item.detail}</p></div><time className='text-xs text-gray-500 whitespace-nowrap'>{new Date(item.date).toLocaleString()}</time></div>)}</div>}
+        </section>
+    </div>;
+};
+
+const GenerationsPage = () => {
+    const call = useAdminApi();
+    const [result, setResult] = useState<AdminPage<Generation> | null>(null);
+    const [type, setType] = useState('');
+    const [status, setStatus] = useState('');
+    const [page, setPage] = useState(1);
+
+    useEffect(() => {
+        const params = new URLSearchParams({ page: String(page), limit: '20' });
+        if (type) params.set('type', type);
+        if (status) params.set('status', status);
+        void call<AdminPage<Generation>>(`/api/admin/generations?${params}`).then(({ data }) => setResult(data)).catch((error: unknown) => {
+            toast.error(getApiErrorMessage(error, 'Unable to load generations'));
+        });
+    }, [call, page, status, type]);
+
+    const items = result?.data || [];
+    return <div className='space-y-5'>
+        <div className='flex gap-3'>
+            <select value={type} onChange={(event) => { setPage(1); setType(event.target.value); }} className='bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm'>
+                <option value=''>All types</option><option value='image'>Image</option><option value='video'>Video</option><option value='carousel'>Carousel</option>
+            </select>
+            <select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value); }} className='bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm'>
+                <option value=''>All statuses</option><option value='SUCCESS'>Success</option><option value='FAILED'>Failed</option><option value='PROCESSING'>Processing</option>
+            </select>
+        </div>
+        <div className={`${cardClass} overflow-x-auto`}>
+            <table className='w-full min-w-[900px] text-left text-sm'>
+                <thead className='text-gray-500 border-b border-white/10'><tr>{['Generation', 'User', 'Type', 'Status', 'Model', 'Credits', 'Created'].map((label) => <th className='p-3 font-medium' key={label}>{label}</th>)}</tr></thead>
+                <tbody>{items.map((item) => <tr key={item.id} className='border-b border-white/5'><td className='p-3'>{item.name}</td><td className='p-3'>{item.user?.name || item.user?.email || item.userId}</td><td className='p-3'>{item.type}</td><td className='p-3'>{item.status}</td><td className='p-3 text-gray-400'>{item.model}</td><td className='p-3'>{item.creditsConsumed}</td><td className='p-3 text-gray-400'>{new Date(item.createdAt).toLocaleString()}</td></tr>)}</tbody>
+            </table>
+            {items.length === 0 && <Empty text='No generations found' />}
+            <div className='flex justify-between border-t border-white/10 p-4 text-sm text-gray-400'>
+                {result?.pagination && <><span>{result.pagination.total} records</span><div className='flex gap-3'><button disabled={page === 1} onClick={() => setPage(page - 1)} className='disabled:opacity-30'>Previous</button><span>{page} / {result.pagination.totalPages}</span><button disabled={page === result.pagination.totalPages} onClick={() => setPage(page + 1)} className='disabled:opacity-30'>Next</button></div></>}
+            </div>
+        </div>
+    </div>;
+};
+
+const DataPage = ({ endpoint, title }: { endpoint: string; title: string }) => {
+    const call = useAdminApi();
+    const [value, setValue] = useState<unknown>(null);
+
+    useEffect(() => {
+        void call<AdminResponse<unknown>>(endpoint).then(({ data }) => setValue(data.data)).catch((error: unknown) => {
+            toast.error(getApiErrorMessage(error, `Unable to load ${title.toLowerCase()}`));
+        });
+    }, [call, endpoint, title]);
+
+    const items = getRows(value);
+    return <div className={cardClass}>
+        <h2 className='font-semibold mb-5'>{title}</h2>
+        {items.length === 0 ? <Empty text='No records found' /> : <div className='max-h-128 overflow-auto'>
+            <table className='w-full min-w-[720px] text-left text-sm'>
+                <thead className='text-gray-500 border-b border-white/10'><tr><th className='p-3'>User / Admin</th><th className='p-3'>Type</th><th className='p-3'>Credits / Amount</th><th className='p-3'>Date</th></tr></thead>
+                <tbody>{items.map((item, index) => <tr key={getText(item.id, item.key, index)} className='border-b border-white/5'>
+                    <td className='p-3'>{getText(getNestedText(item.user), getNestedText(item.admin), item.name, item.key, item.action)}</td>
+                    <td className='p-3'>{getText(item.type, item.action, item.status)}</td>
+                    <td className='p-3'>{getText(item.amount, item.description, item.value)}</td>
+                    <td className='p-3 text-gray-400'>{formatDate(item.createdAt)}</td>
+                </tr>)}</tbody>
+            </table>
+        </div>}
+    </div>;
+};
+
+const Admin = () => {
+    const { user, isLoaded } = useUser();
+    const { signOut } = useClerk();
+    const navigate = useNavigate();
+    const { pathname } = useLocation();
+    const [open, setOpen] = useState(false);
+
+    useEffect(() => {
+        if (isLoaded && !user) navigate('/');
+    }, [isLoaded, navigate, user]);
+
+    if (!isLoaded || !user) return <Loading />;
+
+    const section = pathname.startsWith('/admin/users/')
+        ? 'User Details'
+        : pathname === '/admin/profile'
+            ? 'Admin Profile'
+            : pathname.split('/')[2]
+                ? pathname.split('/')[2].replace('-', ' ')
+                : 'Dashboard';
+    let content: ReactNode = <Overview />;
+    if (pathname === '/admin/users') content = <AdminUsers />;
+    else if (pathname === '/admin/generations') content = <GenerationsPage />;
+    else if (pathname === '/admin/credits') content = <DataPage endpoint='/api/admin/credits/transactions' title='Credit Transactions' />;
+    else if (pathname === '/admin/ai-monitoring') content = <DataPage endpoint='/api/admin/ai-monitoring' title='AI Service Monitoring' />;
+    else if (pathname === '/admin/model-library') content = <AdminModelLibrary />;
+    else if (pathname === '/admin/settings') content = <AdminSettings />;
+    else if (pathname === '/admin/logs') content = <DataPage endpoint='/api/admin/logs?limit=100' title='Audit Logs' />;
+
+    return <div className='min-h-screen text-white pt-24 px-4 md:px-8 pb-12'>
+        <div className='max-w-[1500px] mx-auto flex gap-6'>
+            <aside className={`${open ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:sticky top-24 left-0 z-40 w-64 shrink-0 transition-transform`}>
+                <div className={`${cardClass} h-[calc(100vh-7rem)] flex flex-col`}>
+                    <div className='flex items-center justify-between mb-8'><span className='font-semibold flex items-center gap-2'><ShieldCheckIcon className='size-5 text-violet-300' /> AdGen Studio</span><button className='lg:hidden' onClick={() => setOpen(false)}><XIcon className='size-5' /></button></div>
+                    <nav className='space-y-1'>{nav.map(([href, label, Icon]) => <Link onClick={() => setOpen(false)} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm ${pathname === href ? 'bg-violet-500/20 text-violet-200' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`} to={href} key={href}><Icon className='size-4' />{label}</Link>)}</nav>
+                    <div className='mt-auto border-t border-white/10 pt-4'><Link to='/admin/profile' className='flex items-center gap-3 px-3 py-2 text-sm text-gray-400 hover:text-white'><UsersIcon className='size-4' />Admin Profile</Link><button onClick={() => signOut(() => navigate('/'))} className='flex items-center gap-3 px-3 py-2 text-sm text-gray-400 hover:text-white'><LogOutIcon className='size-4' />Logout</button></div>
+                </div>
+            </aside>
+            <section className='min-w-0 flex-1'>
+                <header className='flex items-center gap-3 mb-7'><button className='lg:hidden p-2 glass-panel rounded-lg' onClick={() => setOpen(true)}><MenuIcon className='size-5' /></button><div><p className='text-sm text-violet-300'>Admin workspace</p><h1 className='text-3xl font-semibold capitalize'>{section}</h1></div></header>
+                {content}
+            </section>
+        </div>
+    </div>;
+};
+
+export default Admin;

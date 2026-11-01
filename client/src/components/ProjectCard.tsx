@@ -7,6 +7,7 @@ import { GhostButton, PrimaryButton } from "./Buttons";
 import { useAuth } from "@clerk/clerk-react";
 import api from "../configs/axios";
 import toast from "react-hot-toast";
+import { getApiErrorMessage } from "../utils/apiError";
 
 const ProjectCard = ({ gen, setGenerations, forCommunity = false }: { gen: Project; setGenerations: React.Dispatch<React.SetStateAction<Project[]>>; forCommunity?: boolean }) => {
     const { getToken } = useAuth();
@@ -25,9 +26,9 @@ const ProjectCard = ({ gen, setGenerations, forCommunity = false }: { gen: Proje
             });
             setGenerations((generations) => generations.filter((gen) => gen.id !== id));
             toast.success(data.message);
-        } catch (error: any) {
-            toast.error(error?.response?.data?.message || error.message);
-            console.log(error);
+        } catch (error: unknown) {
+            toast.error(getApiErrorMessage(error, "Unable to delete project"));
+            console.error(error);
         }
     };
 
@@ -41,9 +42,9 @@ const ProjectCard = ({ gen, setGenerations, forCommunity = false }: { gen: Proje
             setGenerations((generations) => generations.map((gen) => (gen.id === projectId ? { ...gen, isPublished: data.isPublished } : gen)));
 
             toast.success(data.isPublished ? "Project published" : "Project unpublished");
-        } catch (error: any) {
-            toast.error(error?.response?.data?.message || error.message);
-            console.log(error);
+        } catch (error: unknown) {
+            toast.error(getApiErrorMessage(error, "Unable to update project"));
+            console.error(error);
         }
     };
 

@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import type { Project } from "../types";
-import { ImageIcon, Loader2Icon, RefreshCwIcon, SparkleIcon, VideoIcon } from "lucide-react";
+import { ImageIcon, Loader2Icon, RefreshCwIcon, SparkleIcon, VideoIcon, Share2Icon } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { GhostButton, PrimaryButton } from "../components/Buttons";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import api from "../configs/axios";
 import toast from "react-hot-toast";
+import { ShareModal } from "../components/ShareModal";
+import { getApiErrorMessage } from "../utils/apiError";
 
 const Result = () => {
     const { projectId } = useParams();
@@ -17,9 +19,10 @@ const Result = () => {
     const [loading, setLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
     const [selectedImageIndex, setSelectedImageIndex] = useState(0); // For bundle image selection
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
 
-    const fetchProjectData = async () => {
+    const fetchProjectData = useEffectEvent(async () => {
         try {
             const token = await getToken();
             const { data } = await api.get(`/api/user/projects/${projectId}`, {
@@ -28,11 +31,11 @@ const Result = () => {
             setProjectData(data.project);
             setIsGenerating(data.project.isGenerating);
             setLoading(false);
-        } catch (error: any) {
-            toast.error(error?.response?.data?.message || error.message);
-            console.log(error);
+        } catch (error: unknown) {
+            toast.error(getApiErrorMessage(error, "Unable to load project"));
+            console.error(error);
         }
-    };
+    });
 
     const handleGenerateVideo = async () => {
         setIsGenerating(true);
@@ -55,25 +58,25 @@ const Result = () => {
 
             toast.success(data.message);
             setIsGenerating(false);
-        } catch (error: any) {
-            toast.error(error?.response?.data?.message || error.message);
-            console.log(error);
+        } catch (error: unknown) {
+            toast.error(getApiErrorMessage(error, "Unable to generate video"));
+            console.error(error);
         }
     };
 
     useEffect(() => {
         if (user && !project.id) {
-            fetchProjectData();
+            void fetchProjectData();
         } else if (isLoaded && !user) {
             navigate("/");
         }
-    }, [user]);
+    }, [user, project.id, isLoaded, navigate]);
 
     // Fetch project every 10 seconds
     useEffect(() => {
         if (user && isGenerating) {
             const interval = setInterval(() => {
-                fetchProjectData();
+                void fetchProjectData();
             }, 10000);
             return () => clearInterval(interval);
         }
@@ -129,7 +132,7 @@ const Result = () => {
                                                 alt={`Generated ${index + 1}`}
                                                 className="w-full aspect-square object-cover"
                                             />
-                                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                                            <div className="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/60 to-transparent p-2">
                                                 <p className="text-xs text-white font-medium">
                                                     {index === 0 ? 'Hero' : index === 1 ? 'Detail' : 'Action'}
                                                 </p>
@@ -191,6 +194,17 @@ const Result = () => {
                                         Download Video
                                     </GhostButton>
                                 </a>
+
+                                <div className="border-t border-violet-200/10 my-1"></div>
+
+                                {/* Share to Social Media Button */}
+                                <PrimaryButton
+                                    onClick={() => setIsShareModalOpen(true)}
+                                    className="w-full justify-center rounded-md py-3 bg-gradient-to-r from-pink-600 via-indigo-600 to-purple-600 hover:opacity-95 shadow-lg shadow-indigo-600/25"
+                                >
+                                    <Share2Icon className="size-4.5" />
+                                    Share to Social Media
+                                </PrimaryButton>
                             </div>
                         </div>
 
@@ -227,6 +241,18 @@ const Result = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Social Share & Scheduling Modal */}
+            <ShareModal
+                isOpen={isShareModalOpen}
+                onClose={() => setIsShareModalOpen(false)}
+                project={project}
+                initialSelectedMedia={
+                    project.generatedImages && project.generatedImages.length > 0 
+                        ? project.generatedImages[selectedImageIndex] 
+                        : (project.generatedVideo || project.generatedImage)
+                }
+            />
         </div>
     );
 };

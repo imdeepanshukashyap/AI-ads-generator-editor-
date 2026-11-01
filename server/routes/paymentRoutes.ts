@@ -13,6 +13,9 @@ router.post('/create-order', protect, createOrder);
 // Verify payment (requires authentication)
 router.post('/verify', protect, verifyPayment);
 
+// The Razorpay webhook (POST /api/payment/webhook) is registered in server.ts,
+// ahead of express.json(), because its signature is computed over the raw body.
+
 logger.info('[paymentRoutes] Payment routes registered successfully');
 
 export default router;

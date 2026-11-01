@@ -1,5 +1,7 @@
+import { Link } from 'react-router-dom';
 import { assets } from '../assets/assets';
 import { footerLinks } from '../assets/dummy-data';
+import { BRAND_NAME, BUSINESS } from '../configs/business';
 import { motion } from 'framer-motion';
 
 export default function Footer() {
@@ -30,12 +32,22 @@ export default function Footer() {
                                     {section.links.map(
                                         (link: { name: string; url: string }, i) => (
                                             <li key={i}>
-                                                <a
-                                                    href={link.url}
-                                                    className="hover:text-white transition"
-                                                >
-                                                    {link.name}
-                                                </a>
+                                                {link.url.startsWith('/') ? (
+                                                    <Link
+                                                        to={link.url}
+                                                        onClick={() => scrollTo(0, 0)}
+                                                        className="hover:text-white transition"
+                                                    >
+                                                        {link.name}
+                                                    </Link>
+                                                ) : (
+                                                    <a
+                                                        href={link.url}
+                                                        className="hover:text-white transition"
+                                                    >
+                                                        {link.name}
+                                                    </a>
+                                                )}
                                             </li>
                                         )
                                     )}
@@ -46,7 +58,7 @@ export default function Footer() {
                 </div>
 
                 <p className="py-4 text-center text-sm text-gray-400">
-                    © {new Date().getFullYear()} {' '} GreatStack . All rights reserved.
+                    © {new Date().getFullYear()} {BUSINESS.legalName ?? BRAND_NAME}. All rights reserved.
                 </p>
             </div>
         </motion.footer>

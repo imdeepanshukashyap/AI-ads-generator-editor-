@@ -659,11 +659,15 @@ VITE_CLERK_PUBLISHABLE_KEY="pk_test_..."
 
 **4. Database Setup**:
 ```
-1. Create PostgreSQL database (Neon recommended)
+1. Create a NEW, EMPTY PostgreSQL database for development (Neon recommended)
 2. Copy connection string
 3. Add to server .env as DATABASE_URL
 4. Run: cd server && npx prisma generate
-5. Run: npx prisma db push
+5. Run: npx prisma db push   (new, empty development database only)
+
+Never run `prisma db push`, `prisma migrate deploy` or `prisma migrate dev` against production:
+db push drops anything not in the schema file, and prisma/migrations does not match production.
+Production changes use a backup and reviewed additive SQL (PAYMENTS_LIVE_READINESS.md, section 5).
 ```
 
 ### Local Dev Setup Steps
@@ -680,7 +684,7 @@ cd ../server && npm install
 # 3. Setup environment variables
 # Create client/.env and server/.env with values above
 
-# 4. Setup database
+# 4. Setup database (new, empty local database only; never production)
 cd server
 npx prisma generate
 npx prisma db push

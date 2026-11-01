@@ -6,6 +6,9 @@ export interface UploadZoneProps {
     file: File | null;
     onClear: () => void;
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    previewUrl?: string;
+    previewLabel?: string;
+    onChooseLibrary?: () => void;
 }
 
 export interface User {
@@ -34,4 +37,42 @@ export interface Project {
     createdAt: Date | string;
     updatedAt?: Date | string;
     uploadedImages: string[];
+}
+
+export interface SocialAccount {
+    id: string;
+    platform: 'instagram' | 'facebook' | 'youtube';
+    externalId: string;
+    displayName: string;
+    needsReconnect: boolean;
+    tokenExpiresAt?: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface ScheduledPost {
+    id: string;
+    userId: string;
+    projectId: string;
+    socialAccountId: string;
+    mediaType: 'image' | 'video';
+    mediaUrl: string;
+    caption: string;
+    aiDisclosure: boolean;
+    scheduledFor?: string | null;
+    status: 'scheduled' | 'publishing' | 'published' | 'failed';
+    externalPostId?: string | null;
+    externalUrl?: string | null;
+    error?: string | null;
+    attempts: number;
+    createdAt: string;
+    updatedAt: string;
+    socialAccount?: {
+        platform: 'instagram' | 'facebook' | 'youtube';
+        displayName: string;
+    };
+    project?: {
+        name: string;
+        productName: string;
+    };
 }
