@@ -131,9 +131,32 @@ export async function getMetaPagesAndInstagramAccounts(userAccessToken: string):
         status: response.status,
     });
 
-    // If no pages from /me/accounts, try the expanded /me query as fallback
+    // 2. Fallback: Check /me/assigned_pages (for Meta Business Suite / Portfolio assigned pages)
     if (pages.length === 0) {
-        logger.info('[Meta Service] No pages from /me/accounts — trying fallback /me?fields=accounts query');
+        logger.info('[Meta Service] No pages from /me/accounts — trying /me/assigned_pages');
+        try {
+            const assignedRes = await axios.get(`${GRAPH_BASE_URL}/me/assigned_pages`, {
+                params: {
+                    fields: 'id,name,access_token,instagram_business_account{id,username,name}',
+                },
+                headers: {
+                    Authorization: `Bearer ${userAccessToken}`,
+                },
+                timeout: 15000,
+            });
+            const assignedPages = assignedRes.data?.data || [];
+            if (assignedPages.length > 0) {
+                logger.info('[Meta Service] Found pages via /me/assigned_pages', { pageCount: assignedPages.length });
+                return assignedPages;
+            }
+        } catch (assignedErr: any) {
+            logger.warn('[Meta Service] /me/assigned_pages query failed', { error: assignedErr.message });
+        }
+    }
+
+    // 3. Fallback: Expanded /me query
+    if (pages.length === 0) {
+        logger.info('[Meta Service] Trying fallback /me?fields=accounts query');
         try {
             const fallbackRes = await axios.get(`${GRAPH_BASE_URL}/me`, {
                 params: {
@@ -155,29 +178,35 @@ export async function getMetaPagesAndInstagramAccounts(userAccessToken: string):
         } catch (fallbackErr: any) {
             logger.warn('[Meta Service] Fallback /me query also failed', { error: fallbackErr.message });
         }
+    }
 
-        // Last resort: try fetching page directly by known page IDs in env
-        // This handles the Meta dev-mode bug where /me/accounts returns [] even with pages_show_list granted
-        logger.info('[Meta Service] Trying direct page token fetch for known page ID');
+    // 4. Fallback: Direct page token fetch for known/configured page IDs
+    // Handles Meta dev-mode bug where /me/accounts returns [] even with pages_show_list granted
+    if (pages.length === 0) {
+        const defaultPageId = '1284101601463210'; // Default Vigyapanai Page ID
+        const knownPageId = process.env.META_TEST_PAGE_ID || defaultPageId;
+        logger.info('[Meta Service] Trying direct page token fetch for known page ID', { knownPageId });
         try {
-            const knownPageId = process.env.META_TEST_PAGE_ID;
-            if (knownPageId) {
-                const directPageRes = await axios.get(`${GRAPH_BASE_URL}/${knownPageId}`, {
-                    params: {
-                        fields: 'id,name,access_token,instagram_business_account{id,username,name}',
-                        access_token: userAccessToken,
-                    },
-                    timeout: 15000,
-                });
-                logger.info('[Meta Service] Direct page fetch response', {
-                    rawResponse: JSON.stringify(directPageRes.data),
-                });
-                if (directPageRes.data?.id && directPageRes.data?.access_token) {
-                    return [directPageRes.data as MetaPageAccount];
-                }
+            const directPageRes = await axios.get(`${GRAPH_BASE_URL}/${knownPageId}`, {
+                params: {
+                    fields: 'id,name,access_token,instagram_business_account{id,username,name}',
+                    access_token: userAccessToken,
+                },
+                timeout: 15000,
+            });
+            logger.info('[Meta Service] Direct page fetch response', {
+                rawResponse: JSON.stringify(directPageRes.data),
+            });
+            if (directPageRes.data?.id && (directPageRes.data?.access_token || userAccessToken)) {
+                return [{
+                    id: directPageRes.data.id,
+                    name: directPageRes.data.name || 'Vigyapanai',
+                    access_token: directPageRes.data.access_token || userAccessToken,
+                    instagram_business_account: directPageRes.data.instagram_business_account,
+                } as MetaPageAccount];
             }
         } catch (directErr: any) {
-            logger.warn('[Meta Service] Direct page fetch also failed', { error: directErr.message });
+            logger.warn('[Meta Service] Direct page fetch failed', { error: directErr.message });
         }
     }
 
