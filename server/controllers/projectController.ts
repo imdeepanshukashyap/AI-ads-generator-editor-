@@ -68,7 +68,7 @@ export const createProject = async (req: Request, res: Response) => {
 
     let isCreditDeducted = false;
 
-    const { name = 'New Project', aspectRatio, userPrompt, productName, productDescription, targetLength = 8, language = 'English', modelLibraryId } = req.body;
+    const { name = 'New Project', aspectRatio, userPrompt, productName, productDescription, targetLength = 5, language = 'English', modelLibraryId } = req.body;
     const images: any = req.files || [];
 
     // Input validation
@@ -528,7 +528,7 @@ export const createVideo = async (req: Request, res: Response) => {
         const videoOutput = await generateGoogleVideo({
             imageUrl: sourceImage,
             prompt,
-            durationSeconds: Math.max(4, Math.min(project.targetLength || 8, 8)),
+            durationSeconds: Math.max(4, Math.min(project.targetLength || 5, 8)),
             aspectRatio: project.aspectRatio,
         });
         const videoDuration = Date.now() - videoStartTime;
@@ -720,7 +720,7 @@ export const createProjectBundle = async (req: Request, res: Response) => {
     let isCreditDeducted = false;
     let creditsDeducted = 0;
 
-    const { name = 'New Project', aspectRatio, userPrompt, productName, productDescription, targetLength = 8, language = 'English', modelLibraryId } = req.body;
+    const { name = 'New Project', aspectRatio, userPrompt, productName, productDescription, targetLength = 5, language = 'English', modelLibraryId } = req.body;
     const images: any = req.files || [];
 
     // Input validation
