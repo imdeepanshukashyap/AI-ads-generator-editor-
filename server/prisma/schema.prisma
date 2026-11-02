@@ -42,7 +42,7 @@ model Project {
   productDescription String          @default("")
   userPrompt         String          @default("")
   aspectRatio        String          @default("9:16")
-  targetLength       Int             @default(5)
+  targetLength       Int             @default(8)
   language           String          @default("English")
   uploadedImages     String[]
   generatedImage     String          @default("")      // Single image generation (5 credits)
