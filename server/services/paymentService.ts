@@ -21,8 +21,8 @@ import type { PrismaClient } from '../generated/prisma/client.js';
 export const PAYMENT_CURRENCY = 'INR';
 
 export const PURCHASABLE_PLANS = {
-    pro: { name: 'Pro', price: 900, credits: 80 },          // ₹9 = 900 paise
-    ultra: { name: 'Premium', price: 2900, credits: 240 },  // ₹29 = 2900 paise
+    pro: { name: 'Pro', price: 4900, credits: 80 },          // ₹49 = 4900 paise
+    ultra: { name: 'Premium', price: 9900, credits: 240 },  // ₹99 = 9900 paise
 } as const;
 
 export type PlanId = keyof typeof PURCHASABLE_PLANS;

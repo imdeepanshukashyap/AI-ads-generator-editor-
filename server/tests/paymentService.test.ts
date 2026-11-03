@@ -54,15 +54,15 @@ describe('createCheckoutOrder', () => {
         const result = await createCheckoutOrder(deps, { userId: 'user_a', planId: 'pro' });
 
         assert.ok(result.ok);
-        assert.equal(result.amount, 900);
+        assert.equal(result.amount, 4900);
         assert.equal(result.currency, 'INR');
-        assert.deepEqual(gateway.createOrderCalls[0].amount, 900);
+        assert.deepEqual(gateway.createOrderCalls[0].amount, 4900);
         assert.equal(gateway.createOrderCalls[0].receipt, result.transactionId);
 
         const txn = db.txnByOrder(result.orderId)!;
         assert.equal(txn.userId, 'user_a');
         assert.equal(txn.credits, PRO_CREDITS);
-        assert.equal(txn.amount, 900);
+        assert.equal(txn.amount, 4900);
         assert.equal(txn.status, 'pending');
         assert.equal(db.credits('user_a'), STARTING_CREDITS, 'creating an order grants nothing');
     });
@@ -305,7 +305,7 @@ describe('handleRazorpayWebhook', () => {
             'a re-serialised (parsed) body is not accepted',
         );
 
-        const tampered = Buffer.from(delivery.rawBody.toString().replace('"amount":900', '"amount":1'));
+        const tampered = Buffer.from(delivery.rawBody.toString().replace('"amount":4900', '"amount":1'));
         assert.deepEqual(await handleRazorpayWebhook(deps, { rawBody: tampered, signature: delivery.signature }), { status: 'invalid_signature' });
 
         const forged = webhookDelivery('attacker_secret', 'payment.captured', p.payment);

@@ -178,7 +178,7 @@ const PAGE = `<!doctype html>
 <body>
 <h1>Razorpay test checkout <span class="badge">TEST MODE</span></h1>
 <p>No real money moves. Pay with a method from Razorpay's <em>Test Cards Details</em> docs. Credits: <strong id="credits">…</strong></p>
-<p><button onclick="buy('pro')">Buy Pro (₹9 test)</button><button onclick="buy('ultra')">Buy Premium (₹29 test)</button>
+<p><button onclick="buy('pro')">Buy Pro (₹49 test)</button><button onclick="buy('ultra')">Buy Premium (₹99 test)</button>
 <button onclick="reconcileLast()">Reconcile latest order</button><button onclick="refresh()">Refresh</button></p>
 <h2>Latest orders</h2><table id="orders"></table>
 <h2>Results</h2><pre id="log">Ready.</pre>

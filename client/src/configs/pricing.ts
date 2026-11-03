@@ -12,9 +12,9 @@ export const CURRENCY = 'INR';
 export const FREE_SIGNUP_CREDITS = 20;
 
 export const CREDIT_PACKS = [
-    { id: 'pro', name: 'Pro', pricePaise: 900, credits: 80 },
-    { id: 'ultra', name: 'Premium', pricePaise: 2900, credits: 240 },
+    { id: 'pro', name: 'Pro', pricePaise: 4900, credits: 80 },
+    { id: 'ultra', name: 'Premium', pricePaise: 9900, credits: 240 },
 ] as const;
 
-/** 900 → "₹9"; 999 → "₹9.99". */
+/** 4900 → "₹49"; 9900 → "₹99". */
 export const formatInr = (paise: number) => `₹${Number.isInteger(paise / 100) ? paise / 100 : (paise / 100).toFixed(2)}`;
